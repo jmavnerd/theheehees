@@ -937,8 +937,13 @@ async function fetchAndVerify() {
   try {
     let html = null;
 
-    // Try proxies in order
+    // Try proxies in order — own Vercel function first, then public fallbacks
     const proxies = [
+      async () => {
+        const r = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`);
+        if (!r.ok) throw new Error();
+        return await r.text();
+      },
       async () => {
         const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
         if (!r.ok) throw new Error();
@@ -950,11 +955,6 @@ async function fetchAndVerify() {
         if (!r.ok) throw new Error();
         return await r.text();
       },
-      async () => {
-        const r = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`);
-        if (!r.ok) throw new Error();
-        return await r.text();
-      }
     ];
 
     for (const tryProxy of proxies) {
