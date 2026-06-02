@@ -273,6 +273,10 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <div id="m-frame" class="mbd">
   <div class="msh">
     <div class="mhd"></div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="btn bg" style="flex:1" onclick="closeM('m-frame')">Cancel</button>
+      <button class="btn bp" style="flex:2" onclick="saveFrame()">Save</button>
+    </div>
     <div class="mttl" id="fm-title"></div>
     <div class="msec">Hangings</div>
     <div class="hctr">
@@ -283,10 +287,6 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
     </div>
     <div class="msec">Infractions</div>
     <div id="fm-infs"></div>
-    <div style="display:flex;gap:8px;margin-top:16px">
-      <button class="btn bg" style="flex:1" onclick="closeM('m-frame')">Cancel</button>
-      <button class="btn bp" style="flex:2" onclick="saveFrame()">Save</button>
-    </div>
   </div>
 </div>
 
