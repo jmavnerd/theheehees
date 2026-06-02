@@ -253,7 +253,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
   <button class="tb" data-t="history" onclick="tab('history',this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>History
   </button>
-  <button class="tb" data-t="admin" onclick="tab('admin',this)">
+  <button class="tb" data-t="admin" onclick="adminTab(this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0112 0v2"/></svg>Admin
   </button>
 </div>
@@ -291,6 +291,40 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
     <div id="fm-infs"></div>
   </div>
 </div>
+
+<!-- PIN MODAL -->
+<div id="m-pin" class="mbd">
+  <div class="msh" style="text-align:center">
+    <div class="mhd"></div>
+    <div class="mttl">Admin PIN</div>
+    <div id="pin-dots" style="display:flex;justify-content:center;gap:14px;margin:16px 0 20px">
+      <span class="pdot"></span><span class="pdot"></span><span class="pdot"></span><span class="pdot"></span>
+    </div>
+    <div id="pin-err" style="color:#ef4444;font-size:0.85rem;min-height:1.2rem;margin-bottom:10px"></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:240px;margin:0 auto">
+      <button class="pkb" onclick="pinKey('1')">1</button>
+      <button class="pkb" onclick="pinKey('2')">2</button>
+      <button class="pkb" onclick="pinKey('3')">3</button>
+      <button class="pkb" onclick="pinKey('4')">4</button>
+      <button class="pkb" onclick="pinKey('5')">5</button>
+      <button class="pkb" onclick="pinKey('6')">6</button>
+      <button class="pkb" onclick="pinKey('7')">7</button>
+      <button class="pkb" onclick="pinKey('8')">8</button>
+      <button class="pkb" onclick="pinKey('9')">9</button>
+      <button class="pkb" onclick="pinKey('clear')" style="background:var(--surface2);font-size:0.75rem">CLR</button>
+      <button class="pkb" onclick="pinKey('0')">0</button>
+      <button class="pkb" onclick="pinKey('back')" style="background:var(--surface2)">⌫</button>
+    </div>
+    <button class="btn bg bw" style="margin-top:20px" onclick="closeM('m-pin')">Cancel</button>
+  </div>
+</div>
+
+<style>
+.pkb { padding: 1rem; border-radius: 10px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 1.3rem; font-weight: 700; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.pkb:active { background: #3B82F6; color: #fff; }
+.pdot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--muted); background: transparent; transition: background .15s; }
+.pdot.fill { background: #3B82F6; border-color: #3B82F6; }
+</style>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -594,6 +628,54 @@ function tab(name, el) {
   el.classList.add('on');
   if (name==='night')   rNight();
   if (name==='history') rHistory();
+}
+
+// ── Admin PIN ─────────────────────────────────────────────────────────────────
+const ADMIN_PIN = '6969';
+let pinBuf = '';
+let pinTabEl = null;
+let adminUnlocked = false;
+
+function adminTab(el) {
+  if (adminUnlocked) { tab('admin', el); return; }
+  pinTabEl = el;
+  pinBuf = '';
+  updatePinDots();
+  $('pin-err').textContent = '';
+  openM('m-pin');
+}
+
+function pinKey(k) {
+  if (k === 'clear') { pinBuf = ''; }
+  else if (k === 'back') { pinBuf = pinBuf.slice(0, -1); }
+  else if (pinBuf.length < 4) { pinBuf += k; }
+  updatePinDots();
+  if (pinBuf.length === 4) checkPin();
+}
+
+function updatePinDots() {
+  document.querySelectorAll('.pdot').forEach((d, i) => {
+    d.classList.toggle('fill', i < pinBuf.length);
+  });
+}
+
+function checkPin() {
+  if (pinBuf === ADMIN_PIN) {
+    adminUnlocked = true;
+    closeM('m-pin');
+    tab('admin', pinTabEl);
+  } else {
+    $('pin-err').textContent = 'Incorrect PIN';
+    pinBuf = '';
+    updatePinDots();
+  }
+}
+
+// Lock admin when switching away
+const _origTab = tab;
+function tab(name, el) {
+  if (name !== 'admin') adminUnlocked = false;
+  _origTab(name, el);
 }
 
 // ── Game selector ─────────────────────────────────────────────────────────────
