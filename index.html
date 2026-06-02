@@ -816,13 +816,23 @@ function ballVal(s) {
 
 function matchBowler(scoreName) {
   const sn = scoreName.toLowerCase().trim();
-  // Exact
+  const snParts = sn.split(' ');
+  const snFirst = snParts[0];
+  const snLast  = snParts[snParts.length - 1];
+
+  // Exact full name
   let m = S.bowlers.find(b => b.name.toLowerCase() === sn); if (m) return m;
-  // Last name
-  const snLast = sn.split(' ').pop();
-  m = S.bowlers.find(b => b.name.toLowerCase().split(' ').pop() === snLast); if (m) return m;
-  // First name
-  const snFirst = sn.split(' ')[0];
+
+  // Last name match + first name initial must also match (prevents Kenny Eberhardt → TJ)
+  m = S.bowlers.find(b => {
+    const bParts = b.name.toLowerCase().split(' ');
+    const bFirst = bParts[0];
+    const bLast  = bParts[bParts.length - 1];
+    return bLast === snLast && bFirst[0] === snFirst[0];
+  });
+  if (m) return m;
+
+  // First name exact match only (fallback)
   return S.bowlers.find(b => b.name.toLowerCase().split(' ')[0] === snFirst) || null;
 }
 
