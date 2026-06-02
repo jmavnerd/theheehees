@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v4</title>
+<title>Hee Hees v5</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -144,7 +144,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v4</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v5</span></h1>
   <div style="display:flex;align-items:center;gap:8px">
     <span id="week-badge">—</span>
     <span id="sync-dot" class="s-ok">✓</span>
@@ -847,7 +847,6 @@ function parseScoreSheet(html) {
       const nameEl = row.querySelector('.cls_player'); if (!nameEl) return;
       const rawName = nameEl.textContent.trim();
       const bowler = matchBowler(rawName);
-      console.log(`Table ${games.length}: "${rawName}" → ${bowler?.id || 'no match'}`);
       if (!bowler) return;
 
       const frames = [];
@@ -984,14 +983,6 @@ async function fetchAndVerify() {
 
     if (!games.length) throw new Error('No score tables found — wrong URL?');
 
-    // Debug alert
-    let dbgTxt = `Found ${games.length} game table(s)`;
-    games.forEach((g, i) => {
-      dbgTxt += `\n\nGame ${i+1}:`;
-      if (!Object.keys(g).length) { dbgTxt += '\n  (no bowlers matched)'; }
-      Object.keys(g).forEach(bid => { dbgTxt += `\n  ${bid}: total=${g[bid].total}`; });
-    });
-    alert(dbgTxt);
     let dbgHtml = '';
 
     const wn = editingWeek || S.currentWeek;
