@@ -380,6 +380,12 @@ let fmInfs = new Set();
 let saveT = null;
 let saving = false;
 
+// ── Admin PIN ─────────────────────────────────────────────────────────────────
+const ADMIN_PIN = '6969';
+let pinBuf = '';
+let pinTabEl = null;
+let adminUnlocked = false;
+
 // ── Utils ─────────────────────────────────────────────────────────────────────
 const $  = id => document.getElementById(id);
 const gi = id => S.infractions.find(i => i.id === id);
@@ -632,11 +638,6 @@ function tab(name, el) {
 }
 
 // ── Admin PIN ─────────────────────────────────────────────────────────────────
-const ADMIN_PIN = '6969';
-let pinBuf = '';
-let pinTabEl = null;
-let adminUnlocked = false;
-
 function adminTab(el) {
   if (adminUnlocked) { tab('admin', el); return; }
   pinTabEl = el;
