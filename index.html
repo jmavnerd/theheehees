@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Hee Hees</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f0f0f; --surface: #1a1a1a; --surface2: #242424;
+  --border: #333; --text: #f0f0f0; --muted: #888;
+  --tab-h: 60px; --hdr-h: 50px;
+}
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+
+/* Header */
+#hdr { height: var(--hdr-h); background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 14px; flex-shrink: 0; }
+#hdr h1 { font-size: 17px; font-weight: 700; }
+#week-badge { font-size: 11px; color: var(--muted); background: var(--surface2); padding: 3px 9px; border-radius: 10px; }
+#sync-dot { font-size: 11px; padding: 2px 7px; border-radius: 8px; }
+.s-ok  { background: rgba(34,197,94,.2);  color: #22c55e; }
+.s-sav { background: rgba(245,158,11,.2); color: #F59E0B; }
+.s-err { background: rgba(239,68,68,.2);  color: #ef4444; }
+
+/* Tab content */
+#content { flex: 1; overflow-y: auto; }
+.pane { display: none; padding: 12px; }
+.pane.on { display: block; }
+
+/* Tab bar */
+#tabs { height: var(--tab-h); background: var(--surface); border-top: 1px solid var(--border); display: flex; flex-shrink: 0; }
+.tb { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: none; border: none; color: var(--muted); font-size: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tb.on { color: #fff; }
+.tb svg { width: 20px; height: 20px; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; padding: 10px 16px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.bp { background: #3B82F6; color: #fff; }
+.bs { background: #22c55e; color: #fff; }
+.bg { background: var(--surface2); color: var(--text); }
+.bd { background: #ef4444; color: #fff; }
+.bw { width: 100%; }
+
+/* Card */
+.card { background: var(--surface); border-radius: 10px; border: 1px solid var(--border); margin-bottom: 12px; overflow: hidden; }
+.ch { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-weight: 700; }
+.cb { padding: 12px; }
+
+/* Toggle */
+.tgl { position: relative; width: 44px; height: 26px; flex-shrink: 0; }
+.tgl input { opacity: 0; width: 0; height: 0; position: absolute; }
+.tgl-tr { position: absolute; inset: 0; background: var(--border); border-radius: 13px; cursor: pointer; transition: background .2s; }
+.tgl input:checked + .tgl-tr { background: #3B82F6; }
+.tgl-th { position: absolute; width: 20px; height: 20px; background: #fff; border-radius: 50%; top: 3px; left: 3px; pointer-events: none; transition: transform .2s; }
+.tgl input:checked ~ .tgl-th { transform: translateX(18px); }
+
+/* Modal */
+.mbd { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100; align-items: flex-end; }
+.mbd.on { display: flex; }
+.msh { background: var(--surface); border-radius: 16px 16px 0 0; width: 100%; max-height: 88dvh; overflow-y: auto; padding: 14px 14px 24px; border-top: 1px solid var(--border); }
+.mhd { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 14px; }
+.mttl { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+.msec { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 0 8px; }
+
+/* Infraction rows */
+.ir { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); gap: 10px; }
+.ir:last-child { border-bottom: none; }
+.irn { font-weight: 500; }
+.irf { font-size: 12px; color: var(--muted); }
+.badge { font-size: 10px; padding: 1px 5px; border-radius: 4px; font-weight: 600; }
+.bp2 { background: rgba(59,130,246,.2); color: #60A5FA; }
+.ba  { background: rgba(245,158,11,.2); color: #F59E0B; }
+
+/* Hanging counter */
+.hctr { display: flex; align-items: center; gap: 14px; padding: 10px 0; }
+.hbtn { width: 42px; height: 42px; border-radius: 21px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 22px; display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.hnum { font-size: 26px; font-weight: 700; min-width: 32px; text-align: center; }
+
+/* Live tab */
+.game-sel { display: flex; gap: 6px; margin-bottom: 12px; }
+.gbtn { flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-weight: 600; cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent; }
+.gbtn.on { background: #3B82F6; border-color: #3B82F6; color: #fff; }
+
+.bsec { margin-bottom: 10px; }
+.bhdr { display: flex; align-items: center; padding: 8px 10px; border-radius: 8px 8px 0 0; border: 1px solid var(--border); border-bottom: none; gap: 8px; }
+.bname { font-weight: 700; font-size: 14px; flex: 1; }
+.hbadge { display: flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 10px; background: var(--surface2); cursor: pointer; font-size: 12px; }
+.hbadge.lit { background: rgba(239,68,68,.2); color: #ef4444; }
+
+.fgrid { display: grid; grid-template-columns: repeat(5,1fr); gap: 3px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 0 0 8px 8px; }
+.fcell { aspect-ratio: 1; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; position: relative; background: var(--surface2); border: 1px solid var(--border); min-height: 44px; -webkit-tap-highlight-color: transparent; overflow: hidden; padding: 2px; }
+.fcell.abs { opacity: .3; cursor: default; }
+.fcell.fi  { background: rgba(249,115,22,.2); border-color: #F97316; }
+.fnum { font-size: 8px; color: var(--muted); position: absolute; top: 2px; left: 3px; }
+.fchips { display: flex; flex-wrap: wrap; gap: 1px; justify-content: center; margin-top: 8px; }
+.fchip { font-size: 7px; padding: 1px 3px; border-radius: 3px; font-weight: 700; line-height: 1.2; }
+.fcp { background: rgba(245,158,11,.3); color: #F59E0B; }
+.fct { background: rgba(59,130,246,.3); color: #60A5FA; }
+
+/* Start-week bowler row */
+.swrow { display: flex; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--border); gap: 10px; }
+.swrow:last-child { border-bottom: none; }
+.avginp { width: 60px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; color: var(--text); font-size: 14px; text-align: center; }
+
+/* Inputs */
+textarea, input[type=text], input[type=url], input[type=number] {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 9px 11px; color: var(--text); font-size: 14px; font-family: inherit;
+}
+textarea { width: 100%; resize: vertical; }
+input[type=url], input[type=text] { width: 100%; }
+textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
+
+/* Night/history */
+.feerow { display: flex; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--border); gap: 8px; }
+.feerow:last-child { border-bottom: none; }
+.famount { font-size: 18px; font-weight: 700; margin-left: auto; }
+
+/* Verify table */
+.vtbl { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+.vtbl th { text-align: left; padding: 5px 7px; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; }
+.vtbl td { padding: 5px 7px; border-bottom: 1px solid var(--border); }
+.ok  { color: #22c55e; }
+.bad { color: #ef4444; font-weight: 700; }
+.flg { color: #F59E0B; font-weight: 700; }
+
+/* Admin */
+.arow { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); gap: 8px; }
+.arow:last-child { border-bottom: none; }
+.ainp { width: 72px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; color: var(--text); font-size: 14px; text-align: center; }
+
+/* Dot */
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* Util */
+.mt8  { margin-top: 8px; }
+.mt12 { margin-top: 12px; }
+.mt16 { margin-top: 16px; }
+.sm   { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div id="hdr">
+  <h1>🎳 Hee Hees</h1>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span id="week-badge">—</span>
+    <span id="sync-dot" class="s-ok">✓</span>
+  </div>
+</div>
+
+<div id="content">
+
+  <!-- LIVE -->
+  <div id="pane-live" class="pane on">
+    <button id="swbtn" class="btn bp bw" style="margin-bottom:12px">Start Week 1</button>
+    <div class="game-sel">
+      <div class="gbtn on" data-g="0">Game 1</div>
+      <div class="gbtn" data-g="1">Game 2</div>
+      <div class="gbtn" data-g="2">Game 3</div>
+    </div>
+    <div id="bgrid"></div>
+  </div>
+
+  <!-- VERIFY -->
+  <div id="pane-verify" class="pane">
+    <div class="card">
+      <div class="ch">Step 1 — Score URL</div>
+      <div class="cb">
+        <div class="sm" style="margin-bottom:6px">Paste the score URL from syncpassport.com</div>
+        <input type="url" id="vurl" placeholder="https://..." />
+        <button class="btn bp bw mt8" onclick="genVerify()">Generate Prompt →</button>
+        <div id="vpout" style="display:none;margin-top:12px">
+          <div class="sm" style="margin-bottom:4px">Send this to Claude</div>
+          <textarea id="vptxt" rows="3" readonly style="font-size:11px;font-family:monospace"></textarea>
+          <button class="btn bg bw mt8" onclick="copyVerify()">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="card mt12">
+      <div class="ch">Step 2 — Paste Claude's Response</div>
+      <div class="cb">
+        <div class="sm" style="margin-bottom:6px">Paste the VERIFY_RESULT line here</div>
+        <textarea id="vrin" rows="4" placeholder='VERIFY_RESULT|{"gil":{"hangings":1,...}}'></textarea>
+        <button class="btn bp bw mt8" onclick="applyVerify()">Apply Result</button>
+        <div id="vcmp" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NIGHT -->
+  <div id="pane-night" class="pane">
+    <div class="card">
+      <div class="ch">Tonight's Summary</div>
+      <div id="nsum" class="cb"></div>
+    </div>
+    <button id="cwbtn" class="btn bs bw mt12" style="display:none">Close Week</button>
+  </div>
+
+  <!-- HISTORY -->
+  <div id="pane-history" class="pane">
+    <div class="card">
+      <div class="ch">Season Totals</div>
+      <div id="stots" class="cb"></div>
+    </div>
+    <div class="card mt12">
+      <div class="ch">Week Log</div>
+      <div id="wlog" class="cb"></div>
+    </div>
+  </div>
+
+  <!-- ADMIN -->
+  <div id="pane-admin" class="pane">
+    <div class="card">
+      <div class="ch">Season</div>
+      <div class="cb">
+        <div class="arow">
+          <span style="flex:1">Season Name</span>
+          <input type="text" id="adm-season" style="width:90px;padding:5px 8px" />
+        </div>
+      </div>
+    </div>
+    <div class="card mt12">
+      <div class="ch">Bowler Starting Averages</div>
+      <div id="adm-bowlers" class="cb"></div>
+    </div>
+    <div class="card mt12">
+      <div class="ch">Infraction Fees</div>
+      <div id="adm-infs" class="cb"></div>
+    </div>
+    <button class="btn bp bw mt16" onclick="saveAdmin()">Save Changes</button>
+    <div style="margin-top:24px;padding:12px;background:var(--surface2);border-radius:8px;">
+      <div style="font-weight:600;margin-bottom:8px;color:#ef4444">Danger Zone</div>
+      <button class="btn bd bw" onclick="resetSeason()">Reset Season Data</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- TAB BAR -->
+<div id="tabs">
+  <button class="tb on" data-t="live" onclick="tab('live',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>Live
+  </button>
+  <button class="tb" data-t="verify" onclick="tab('verify',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>Verify
+  </button>
+  <button class="tb" data-t="night" onclick="tab('night',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>Night
+  </button>
+  <button class="tb" data-t="history" onclick="tab('history',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>History
+  </button>
+  <button class="tb" data-t="admin" onclick="tab('admin',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0112 0v2"/></svg>Admin
+  </button>
+</div>
+
+<!-- START WEEK MODAL -->
+<div id="m-sw" class="mbd">
+  <div class="msh">
+    <div class="mhd"></div>
+    <div class="mttl">Start Week <span id="sw-wn"></span></div>
+    <div id="sw-list"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn bg" style="flex:1" onclick="closeM('m-sw')">Cancel</button>
+      <button class="btn bp" style="flex:2" onclick="confirmSW()">Start Week →</button>
+    </div>
+  </div>
+</div>
+
+<!-- FRAME MODAL -->
+<div id="m-frame" class="mbd">
+  <div class="msh">
+    <div class="mhd"></div>
+    <div class="mttl" id="fm-title"></div>
+    <div class="msec">Hangings</div>
+    <div class="hctr">
+      <button class="hbtn" onclick="adjHang(-1)">−</button>
+      <div class="hnum" id="hnum">0</div>
+      <button class="hbtn" onclick="adjHang(1)">+</button>
+      <div class="sm" id="hfee" style="margin-left:4px"></div>
+    </div>
+    <div class="msec">Infractions</div>
+    <div id="fm-infs"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn bg" style="flex:1" onclick="closeM('m-frame')">Cancel</button>
+      <button class="btn bp" style="flex:2" onclick="saveFrame()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SB_URL = 'https://cvecpzmeqtitvaltrmzh.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2ZWNwem1lcXRpdHZhbHRybXpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MTIyNTUsImV4cCI6MjA5NTk4ODI1NX0.xNpWkCVq1x-FnTNovGnpEGL0SPWTumK5eI5sqyqD6ec';
+const ROW_ID = 'hh12';
+const sb = window.supabase.createClient(SB_URL, SB_KEY);
+
+// ── Default state ─────────────────────────────────────────────────────────────
+const DEFAULTS = {
+  season: '25-26',
+  currentWeek: null,
+  bowlers: [
+    { id:'gil',  name:'Gil Santiago',  initials:'GS', color:'#1D9E75', avg:180, core:true },
+    { id:'tj',   name:'TJ Eberhardt', initials:'TJ', color:'#185FA5', avg:180, core:true },
+    { id:'john', name:'John Merritt',  initials:'JM', color:'#D85A30', avg:180, core:true },
+    { id:'jeff', name:'Jeff Terito',   initials:'JT', color:'#534AB7', avg:180, core:true },
+  ],
+  infractions: [
+    { id:'absent',          name:'Absent',           fee:10.00, type:'player' },
+    { id:'brokeseal',       name:'Broke the Seal',   fee: 5.00, type:'player' },
+    { id:'droppedpoint',    name:'Dropped Point',    fee: 1.00, type:'player' },
+    { id:'foul',            name:'Foul',             fee: 5.00, type:'player' },
+    { id:'goldenstrikeout', name:'Golden Strikeout', fee:50.00, type:'player' },
+    { id:'gutterball',      name:'Gutter Ball',      fee: 5.00, type:'player' },
+    { id:'highgame',        name:'High Game',        fee:10.00, type:'team'   },
+    { id:'jeffopen',        name:'Open (Jeff)',      fee: 0.50, type:'player', onlyFor:['jeff'] },
+    { id:'jeffsinglepin',   name:'Single Pin (Jeff)',fee: 1.00, type:'player', onlyFor:['jeff'] },
+    { id:'late',            name:'Late',             fee: 5.00, type:'player' },
+    { id:'lowgame',         name:'Low Game',         fee:10.00, type:'player' },
+    { id:'open',            name:'Open',             fee: 0.25, type:'player', excludeFor:['jeff'] },
+    { id:'outofuniform',    name:'Out of Uniform',   fee: 5.00, type:'player' },
+    { id:'singlepinmiss',   name:'Single Pin Miss',  fee: 0.50, type:'player', excludeFor:['jeff'] },
+    { id:'spillbeer',       name:'Spill Beer',       fee:20.00, type:'player' },
+    { id:'swept',           name:'Swept',            fee: 5.00, type:'player' },
+    { id:'talkingshit',     name:'Talking Shit',     fee: 5.00, type:'player' },
+    { id:'wronglane',       name:'Wrong Lane',       fee: 5.00, type:'player' },
+    { id:'xxxx',            name:'XXXX',             fee: 0.25, type:'team'   },
+    { id:'leftgutter',      name:'Left-Side Gutter', fee:25.00, type:'player' },
+    { id:'under500',        name:'Under 500',        fee:10.00, type:'player' },
+    { id:'over10pin',       name:'Over 10 Pin Drop', fee:25.00, type:'player' },
+    { id:'wincards',        name:'Win Cards',        fee: 1.00, type:'team'   },
+  ],
+  weeks: {}
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let S = JSON.parse(JSON.stringify(DEFAULTS));
+let curGame = 0;
+let fmCtx = null;   // { bowlerId, gameIdx, frameIdx }
+let fmHang = 0;
+let fmInfs = new Set();
+let saveT = null;
+let saving = false;
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const gi = id => S.infractions.find(i => i.id === id);
+const gb = id => S.bowlers.find(b => b.id === id);
+const $f = v  => `$${v.toFixed(2)}`;
+const gw = n  => S.weeks[n] || null;
+
+function hangVal(n) {
+  const sc = [.5,1,2,4,8,16];
+  let t = 0;
+  for (let i = 0; i < n; i++) t += sc[i % 6];
+  return t;
+}
+
+function infVisible(inf, bid) {
+  if (inf.id === 'absent') return false;
+  if (inf.id === 'over10pin' && S.currentWeek !== 36) return false;
+  if (inf.onlyFor    && !inf.onlyFor.includes(bid))    return false;
+  if (inf.excludeFor &&  inf.excludeFor.includes(bid)) return false;
+  return true;
+}
+
+function feesFor(bid, wn) {
+  const w = gw(wn); if (!w) return 0;
+  let t = 0;
+  if (w.absent?.includes(bid)) t += 10;
+  for (let g = 0; g < 3; g++) {
+    const bg = w.games?.[g]?.[bid];
+    if (!bg) continue;
+    for (let f = 0; f < 10; f++)
+      for (const iid of (bg.frames?.[f] || [])) {
+        const inf = gi(iid);
+        if (inf?.type === 'player') t += inf.fee;
+      }
+  }
+  // team infractions from others
+  for (const oid of (w.participating || [])) {
+    if (oid === bid) continue;
+    for (let g = 0; g < 3; g++) {
+      const og = w.games?.[g]?.[oid];
+      if (!og) continue;
+      for (let f = 0; f < 10; f++)
+        for (const iid of (og.frames?.[f] || [])) {
+          const inf = gi(iid);
+          if (inf?.type === 'team') t += inf.fee;
+        }
+    }
+  }
+  t += hangVal(w.hangings?.[bid] || 0);
+  return t;
+}
+
+function seasonTotals() {
+  const out = {};
+  S.bowlers.forEach(b => { out[b.id] = 0; });
+  Object.keys(S.weeks).forEach(wn => S.bowlers.forEach(b => { out[b.id] += feesFor(b.id, +wn); }));
+  return out;
+}
+
+// ── Supabase ──────────────────────────────────────────────────────────────────
+function syncDot(s) {
+  const el = $('sync-dot');
+  el.className = s === 'ok' ? 's-ok' : s === 'sav' ? 's-sav' : 's-err';
+  el.textContent = s === 'ok' ? '✓' : s === 'sav' ? '↑' : '!';
+}
+
+async function loadState() {
+  syncDot('sav');
+  try {
+    const { data, error } = await sb.from('hee_hees_state').select('state').eq('id', ROW_ID).single();
+    if (error && error.code !== 'PGRST116') throw error;
+    if (data?.state) S = data.state;
+    syncDot('ok');
+  } catch(e) { console.error(e); syncDot('err'); }
+  render();
+}
+
+async function pushState() {
+  saving = true; syncDot('sav');
+  try {
+    const { error } = await sb.from('hee_hees_state').upsert({ id: ROW_ID, state: S, updated_at: new Date().toISOString() });
+    if (error) throw error;
+    syncDot('ok');
+  } catch(e) { console.error(e); syncDot('err'); }
+  saving = false;
+}
+
+function save() {
+  clearTimeout(saveT);
+  syncDot('sav');
+  saveT = setTimeout(pushState, 500);
+}
+
+function subscribe() {
+  sb.channel('hh12')
+    .on('postgres_changes', { event:'*', schema:'public', table:'hee_hees_state', filter:`id=eq.${ROW_ID}` }, p => {
+      if (p.new?.state && !saving) { S = p.new.state; render(); }
+    })
+    .subscribe();
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() { rHdr(); rLive(); rNight(); rHistory(); rAdmin(); }
+
+function rHdr() {
+  const wn = S.currentWeek;
+  $('week-badge').textContent = wn ? `Week ${wn} of 36` : 'No active week';
+}
+
+function rLive() {
+  const wn = S.currentWeek;
+  const w  = wn ? gw(wn) : null;
+  const btn = $('swbtn');
+
+  if (wn >= 36 && w?.closed) {
+    btn.style.display = 'none';
+  } else {
+    btn.style.display = '';
+    if (w && !w.closed) {
+      btn.textContent = `Week ${wn} in progress`;
+      btn.className   = 'btn bg bw';
+      btn.disabled    = true;
+    } else {
+      const next = (wn || 0) + 1;
+      btn.textContent = `Start Week ${next}`;
+      btn.className   = 'btn bp bw';
+      btn.disabled    = false;
+    }
+  }
+
+  const grid = $('bgrid');
+  if (!w) {
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Tap Start Week to begin</div>';
+    return;
+  }
+
+  grid.innerHTML = '';
+  S.bowlers.forEach(b => {
+    const playing = w.participating.includes(b.id);
+    const absent  = w.absent?.includes(b.id);
+    const hangings = w.hangings?.[b.id] || 0;
+    const fee = feesFor(b.id, wn);
+
+    const sec  = document.createElement('div'); sec.className = 'bsec';
+    const hdr  = document.createElement('div'); hdr.className = 'bhdr';
+    hdr.style.borderLeft = `4px solid ${b.color}`;
+    hdr.innerHTML = `
+      <span class="bname">${b.name}</span>
+      ${absent ? '<span class="sm">Absent</span>' : `<span style="font-size:13px;font-weight:600">${$f(fee)}</span>`}
+      ${playing ? `<div class="hbadge ${hangings>0?'lit':''}" onclick="openHangOnly('${b.id}')">🪝 ${hangings}</div>` : ''}
+    `;
+    sec.appendChild(hdr);
+
+    const fg = document.createElement('div'); fg.className = 'fgrid';
+    for (let f = 0; f < 10; f++) {
+      const cell = document.createElement('div'); cell.className = 'fcell';
+      if (absent || !playing) { cell.classList.add('abs'); }
+      else {
+        const frameInfs = w.games?.[curGame]?.[b.id]?.frames?.[f] || [];
+        if (frameInfs.length) {
+          cell.classList.add('fi');
+          cell.innerHTML = `<span class="fnum">${f+1}</span><div class="fchips">${
+            frameInfs.map(iid => {
+              const inf = gi(iid); if (!inf) return '';
+              return `<span class="fchip ${inf.type==='team'?'fct':'fcp'}">${abbr(inf.name)}</span>`;
+            }).join('')
+          }</div>`;
+        } else {
+          cell.innerHTML = `<span class="fnum">${f+1}</span>`;
+        }
+        cell.onclick = () => openFrame(b.id, curGame, f);
+      }
+      fg.appendChild(cell);
+    }
+    sec.appendChild(fg);
+    grid.appendChild(sec);
+  });
+}
+
+function abbr(name) {
+  const map = {
+    'Absent':'ABS','Broke the Seal':'BKS','Dropped Point':'DP','Foul':'FOL',
+    'Golden Strikeout':'GSO','Gutter Ball':'GB','High Game':'HG',
+    'Open (Jeff)':'OPN','Single Pin (Jeff)':'SP','Late':'LTE','Low Game':'LG',
+    'Open':'OPN','Out of Uniform':'OOU','Single Pin Miss':'SP','Spill Beer':'SB',
+    'Swept':'SWP','Talking Shit':'TS','Wrong Lane':'WL','XXXX':'XXXX',
+    'Left-Side Gutter':'LG2','Under 500':'U5','Over 10 Pin Drop':'10P','Win Cards':'WC'
+  };
+  return map[name] || name.substring(0,3).toUpperCase();
+}
+
+function rNight() {
+  const wn = S.currentWeek; const w = wn ? gw(wn) : null;
+  const nsum = $('nsum'); const cwb = $('cwbtn');
+  if (!w) { nsum.innerHTML = '<div class="sm">No active week.</div>'; cwb.style.display='none'; return; }
+  cwb.style.display = '';
+  let html = ''; let grand = 0;
+  S.bowlers.forEach(b => {
+    const fee = feesFor(b.id, wn); grand += fee;
+    const hang = w.hangings?.[b.id] || 0;
+    html += `<div class="feerow">
+      <span class="dot" style="background:${b.color}"></span>
+      <div style="flex:1">
+        <div style="font-weight:600">${b.name}</div>
+        ${hang>0?`<div class="sm">🪝 ${hang} hang${hang>1?'s':''} (${$f(hangVal(hang))})</div>`:''}
+      </div>
+      <span class="famount">${$f(fee)}</span>
+    </div>`;
+  });
+  html += `<div style="padding:10px 0;text-align:right;border-top:1px solid var(--border);font-weight:700;font-size:16px">Total: ${$f(grand)}</div>`;
+  nsum.innerHTML = html;
+}
+
+function rHistory() {
+  const tots = seasonTotals();
+  $('stots').innerHTML = S.bowlers.map(b =>
+    `<div class="feerow"><span class="dot" style="background:${b.color}"></span><span style="flex:1;font-weight:600">${b.name}</span><span class="famount">${$f(tots[b.id])}</span></div>`
+  ).join('') || '<div class="sm">No data.</div>';
+
+  const wns = Object.keys(S.weeks).map(Number).sort((a,b)=>b-a);
+  $('wlog').innerHTML = wns.length ? wns.map(wn => {
+    const w = S.weeks[wn];
+    const fees = S.bowlers.map(b=>`<span style="color:${b.color}">${b.initials}:${$f(feesFor(b.id,wn))}</span>`).join(' ');
+    return `<div class="feerow" style="flex-direction:column;align-items:flex-start">
+      <div style="font-weight:600">Week ${wn} <span class="sm">${w.date||''}</span></div>
+      <div class="sm" style="margin-top:2px">${fees}</div>
+    </div>`;
+  }).join('') : '<div class="sm">No weeks logged.</div>';
+}
+
+function rAdmin() {
+  $('adm-season').value = S.season || '';
+  $('adm-bowlers').innerHTML = S.bowlers.map(b =>
+    `<div class="arow"><span class="dot" style="background:${b.color}"></span><span style="flex:1">${b.name}</span><input class="ainp" data-bid="${b.id}" type="number" value="${b.avg}" min="0" max="300"/></div>`
+  ).join('');
+  $('adm-infs').innerHTML = S.infractions.map(inf =>
+    `<div class="arow"><span style="flex:1;font-size:13px">${inf.name}</span><span class="badge ${inf.type==='team'?'bp2':'ba'}">${inf.type}</span><span class="sm" style="margin-right:2px">$</span><input class="ainp" data-iid="${inf.id}" type="number" value="${inf.fee.toFixed(2)}" min="0" step="0.25"/></div>`
+  ).join('');
+}
+
+// ── Tab nav ───────────────────────────────────────────────────────────────────
+function tab(name, el) {
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.tb').forEach(b=>b.classList.remove('on'));
+  $(`pane-${name}`).classList.add('on');
+  el.classList.add('on');
+  if (name==='night')   rNight();
+  if (name==='history') rHistory();
+}
+
+// ── Game selector ─────────────────────────────────────────────────────────────
+document.querySelectorAll('.gbtn').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.gbtn').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  curGame = +b.dataset.g;
+  rLive();
+}));
+
+// ── Start Week ────────────────────────────────────────────────────────────────
+$('swbtn').addEventListener('click', () => {
+  const next = (S.currentWeek || 0) + 1;
+  if (next > 36) return;
+  $('sw-wn').textContent = next;
+  $('sw-list').innerHTML = S.bowlers.map(b =>
+    `<div class="swrow">
+      <span class="dot" style="background:${b.color};width:12px;height:12px"></span>
+      <span style="flex:1;font-weight:600">${b.name}</span>
+      <span class="sm" style="margin-right:6px">Avg</span>
+      <input class="avginp" id="sw-avg-${b.id}" type="number" value="${b.avg}" min="0" max="300"/>
+      <label class="tgl" style="margin-left:10px">
+        <input type="checkbox" id="sw-on-${b.id}" ${b.core?'checked':''}>
+        <div class="tgl-tr"></div><div class="tgl-th"></div>
+      </label>
+    </div>`
+  ).join('');
+  openM('m-sw');
+});
+
+function confirmSW() {
+  const next = (S.currentWeek || 0) + 1;
+  const participating=[], absent=[], avgs={};
+  S.bowlers.forEach(b => {
+    const on = $(`sw-on-${b.id}`)?.checked;
+    avgs[b.id] = parseFloat($(`sw-avg-${b.id}`)?.value) || b.avg;
+    (on ? participating : absent).push(b.id);
+  });
+  S.weeks[next] = { date: new Date().toLocaleDateString('en-US'), participating, absent, avgs, hangings:{}, games:[{},{},{}] };
+  S.currentWeek = next;
+  closeM('m-sw'); save(); render();
+}
+
+// ── Frame modal ───────────────────────────────────────────────────────────────
+function openFrame(bid, gidx, fidx) {
+  const w = gw(S.currentWeek); if (!w) return;
+  fmCtx = { bid, gidx, fidx };
+  const b = gb(bid);
+  $('fm-title').textContent = `${b.name} — G${gidx+1} F${fidx+1}`;
+  fmHang = w.hangings?.[bid] || 0;
+  updHang();
+  const existing = w.games?.[gidx]?.[bid]?.frames?.[fidx] || [];
+  fmInfs = new Set(existing);
+  $('fm-infs').innerHTML = S.infractions.filter(i=>infVisible(i,bid)).map(inf =>
+    `<div class="ir">
+      <div style="flex:1"><div class="irn">${inf.name}</div><div class="irf">${$f(inf.fee)} <span class="badge ${inf.type==='team'?'bp2':'ba'}">${inf.type}</span></div></div>
+      <label class="tgl">
+        <input type="checkbox" id="it-${inf.id}" ${fmInfs.has(inf.id)?'checked':''} onchange="togInf('${inf.id}',this.checked)">
+        <div class="tgl-tr"></div><div class="tgl-th"></div>
+      </label>
+    </div>`
+  ).join('');
+  openM('m-frame');
+}
+
+function openHangOnly(bid) { openFrame(bid, curGame, 0); }
+
+function togInf(id, on) { on ? fmInfs.add(id) : fmInfs.delete(id); }
+
+function adjHang(d) {
+  const w = gw(S.currentWeek); if (!w || !fmCtx) return;
+  fmHang = Math.max(0, (w.hangings?.[fmCtx.bid] || 0) + d);
+  updHang();
+}
+
+function updHang() {
+  $('hnum').textContent = fmHang;
+  $('hfee').textContent = fmHang > 0 ? $f(hangVal(fmHang)) : '';
+}
+
+function saveFrame() {
+  const { bid, gidx, fidx } = fmCtx;
+  const w = gw(S.currentWeek); if (!w) return;
+  if (!w.hangings) w.hangings = {};
+  w.hangings[bid] = fmHang;
+  if (!w.games[gidx]) w.games[gidx] = {};
+  if (!w.games[gidx][bid]) w.games[gidx][bid] = { frames: Array(10).fill(null).map(()=>[]) };
+  w.games[gidx][bid].frames[fidx] = [...fmInfs];
+  closeM('m-frame'); save(); rLive();
+}
+
+// ── Modal helpers ─────────────────────────────────────────────────────────────
+function openM(id)  { $(id).classList.add('on'); }
+function closeM(id) { $(id).classList.remove('on'); }
+document.querySelectorAll('.mbd').forEach(m => m.addEventListener('click', e => { if (e.target===m) closeM(m.id); }));
+
+// ── Close week ────────────────────────────────────────────────────────────────
+$('cwbtn').addEventListener('click', () => {
+  const wn = S.currentWeek; if (!wn) return;
+  if (!confirm(`Close Week ${wn}?`)) return;
+  S.weeks[wn].closed = true;
+  save(); render();
+});
+
+// ── Verify ────────────────────────────────────────────────────────────────────
+function genVerify() {
+  const url = $('vurl').value.trim();
+  if (!url) { alert('Paste a URL first.'); return; }
+  const wn = S.currentWeek;
+  const w  = wn ? gw(wn) : null;
+  const bowlers = w ? S.bowlers.filter(b=>w.participating.includes(b.id)) : S.bowlers;
+  const bstr = bowlers.map(b=>`${b.name}=${b.id}:avg=${w?.avgs?.[b.id]||b.avg}`).join(',');
+  const prompt = `VERIFY_SCORES|url=${url}|bowlers=${bstr}|week=${wn||1}`;
+  $('vptxt').value = prompt;
+  $('vpout').style.display = '';
+}
+
+function copyVerify() {
+  navigator.clipboard.writeText($('vptxt').value).then(()=>alert('Copied!'));
+}
+
+function applyVerify() {
+  const raw   = $('vrin').value.trim();
+  const match = raw.match(/VERIFY_RESULT\|(\{[\s\S]+\})/);
+  if (!match) { alert('Could not find VERIFY_RESULT|{...}'); return; }
+  let res; try { res = JSON.parse(match[1]); } catch(e) { alert('Invalid JSON'); return; }
+
+  const wn = S.currentWeek; const w = wn ? gw(wn) : null;
+  let html = '<table class="vtbl"><thead><tr><th>Bowler</th><th>Hangings</th><th>XXXX</th><th>Flags</th></tr></thead><tbody>';
+  S.bowlers.forEach(b => {
+    const r = res[b.id]; if (!r) return;
+    const lh = w?.hangings?.[b.id] || 0;
+    const lx = countInf(b.id, 'xxxx', wn);
+    const flags=[];
+    if(r.swept)    flags.push('<span class="flg">SWEPT</span>');
+    if(r.highGame) flags.push('<span class="flg">HIGH</span>');
+    if(r.lowGame)  flags.push('<span class="flg">LOW</span>');
+    if(r.under500) flags.push('<span class="flg">U500</span>');
+    html += `<tr>
+      <td><span class="dot" style="background:${b.color};margin-right:4px"></span>${b.initials}</td>
+      <td class="${lh===r.hangings?'ok':'bad'}">${lh}/${r.hangings}</td>
+      <td class="${lx===r.xxxx?'ok':'bad'}">${lx}/${r.xxxx}</td>
+      <td>${flags.join(' ')||'—'}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  $('vcmp').innerHTML = html;
+}
+
+function countInf(bid, iid, wn) {
+  const w = gw(wn); if (!w) return 0;
+  let n=0;
+  for(let g=0;g<3;g++) { const bg=w.games?.[g]?.[bid]; if(!bg)continue; for(let f=0;f<10;f++) n+=(bg.frames?.[f]||[]).filter(x=>x===iid).length; }
+  return n;
+}
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+function saveAdmin() {
+  S.season = $('adm-season').value.trim() || S.season;
+  document.querySelectorAll('[data-bid]').forEach(inp => { const b=gb(inp.dataset.bid); if(b) b.avg=parseFloat(inp.value)||b.avg; });
+  document.querySelectorAll('[data-iid]').forEach(inp => { const i=gi(inp.dataset.iid); if(i) i.fee=parseFloat(inp.value)||i.fee; });
+  save(); render(); alert('Saved!');
+}
+
+function resetSeason() {
+  if (!confirm('Reset ALL season data? This cannot be undone.')) return;
+  S = JSON.parse(JSON.stringify(DEFAULTS));
+  save(); render(); alert('Reset complete.');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadState().then(()=>subscribe());
+</script>
+</body>
+</html>
