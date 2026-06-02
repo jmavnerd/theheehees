@@ -632,7 +632,8 @@ function rHistory() {
         <div style="font-weight:600">Week ${wn} <span class="sm">${w.date||''}</span></div>
         <div class="sm" style="margin-top:2px">${fees}</div>
       </div>
-      <button class="btn" style="background:var(--surface2);color:var(--text);font-size:0.8rem;padding:6px 12px" onclick="editWeek(${wn})">✏️ Edit</button>
+      <button class="btn" style="background:var(--surface2);color:var(--text);font-size:0.8rem;padding:6px 12px;margin-right:6px" onclick="editWeek(${wn})">✏️ Edit</button>
+      <button class="btn bd" style="font-size:0.8rem;padding:6px 12px" onclick="deleteWeek(${wn})">🗑️</button>
     </div>`;
   }).join('') : '<div class="sm">No weeks logged.</div>';
 }
@@ -663,6 +664,13 @@ function tab(name, el) {
 function editWeek(wn) {
   editingWeek = wn;
   tab('live', document.querySelector('.tb[data-t="live"]'));
+}
+
+function deleteWeek(wn) {
+  if (!confirm(`Delete Week ${wn} and all its data? This cannot be undone.`)) return;
+  delete S.weeks[wn];
+  if (S.currentWeek === wn) S.currentWeek = Math.max(0, ...Object.keys(S.weeks).map(Number)) || null;
+  save(); render();
 }
 
 function doneEditing() {
