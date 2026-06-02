@@ -171,27 +171,15 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
   <!-- VERIFY -->
   <div id="pane-verify" class="pane">
     <div class="card">
-      <div class="ch">Step 1 — Score URL</div>
+      <div class="ch">Score Verification</div>
       <div class="cb">
-        <div class="sm" style="margin-bottom:6px">Paste the score URL from syncpassport.com</div>
+        <div class="sm" style="margin-bottom:6px">Paste the score URL from your email</div>
         <input type="url" id="vurl" placeholder="https://..." />
-        <button class="btn bp bw mt8" onclick="genVerify()">Generate Prompt →</button>
-        <div id="vpout" style="display:none;margin-top:12px">
-          <div class="sm" style="margin-bottom:4px">Send this to Claude</div>
-          <textarea id="vptxt" rows="3" readonly style="font-size:11px;font-family:monospace"></textarea>
-          <button class="btn bg bw mt8" onclick="copyVerify()">Copy</button>
-        </div>
+        <button class="btn bp bw mt8" id="verify-btn" onclick="fetchAndVerify()">Fetch &amp; Verify</button>
+        <div id="verify-status" class="sm mt8"></div>
       </div>
     </div>
-    <div class="card mt12">
-      <div class="ch">Step 2 — Paste Claude's Response</div>
-      <div class="cb">
-        <div class="sm" style="margin-bottom:6px">Paste the VERIFY_RESULT line here</div>
-        <textarea id="vrin" rows="4" placeholder='VERIFY_RESULT|{"gil":{"hangings":1,...}}'></textarea>
-        <button class="btn bp bw mt8" onclick="applyVerify()">Apply Result</button>
-        <div id="vcmp" style="margin-top:10px"></div>
-      </div>
-    </div>
+    <div id="verify-results" style="margin-top:12px"></div>
   </div>
 
   <!-- NIGHT -->
@@ -818,48 +806,226 @@ $('cwbtn').addEventListener('click', () => {
 });
 
 // ── Verify ────────────────────────────────────────────────────────────────────
-function genVerify() {
+
+function ballVal(s) {
+  s = (s||'').trim();
+  if (s === 'X') return 10;
+  if (s === '-') return 0;
+  const n = parseInt(s); return isNaN(n) ? 0 : n;
+}
+
+function matchBowler(scoreName) {
+  const sn = scoreName.toLowerCase().trim();
+  // Exact
+  let m = S.bowlers.find(b => b.name.toLowerCase() === sn); if (m) return m;
+  // Last name
+  const snLast = sn.split(' ').pop();
+  m = S.bowlers.find(b => b.name.toLowerCase().split(' ').pop() === snLast); if (m) return m;
+  // First name
+  const snFirst = sn.split(' ')[0];
+  return S.bowlers.find(b => b.name.toLowerCase().split(' ')[0] === snFirst) || null;
+}
+
+function parseScoreSheet(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const gameTables = doc.querySelectorAll('table.scoresheet');
+  const games = [];
+
+  gameTables.forEach(gt => {
+    const game = {};
+    gt.querySelectorAll('tr.notranslate').forEach(row => {
+      const nameEl = row.querySelector('.cls_player'); if (!nameEl) return;
+      const bowler = matchBowler(nameEl.textContent.trim()); if (!bowler) return;
+
+      const frames = [];
+
+      // Frames 1–9
+      row.querySelectorAll('td.cls_frame').forEach(cell => {
+        const b1 = cell.querySelector('.cls_ball1')?.textContent.trim() || '';
+        const b2 = cell.querySelector('.cls_ball2')?.textContent.trim() || '';
+        frames.push([b1, b2]);
+      });
+
+      // Frame 10 (first cls_frame10 has the balls10 table)
+      const frame10cells = row.querySelectorAll('td.cls_frame10');
+      let total = 0;
+      frame10cells.forEach(cell => {
+        if (cell.querySelector('.cls_tbl_balls10')) {
+          const b1 = cell.querySelector('.cls_ball1')?.textContent.trim() || '';
+          const b2 = cell.querySelector('.cls_ball2')?.textContent.trim() || '';
+          const b3 = cell.querySelector('.cls_ball3')?.textContent.trim() || '';
+          frames.push([b1, b2, b3]);
+        }
+        const tot = cell.querySelector('.cls_scoretotal');
+        if (tot) total = parseInt(tot.textContent.trim()) || 0;
+      });
+
+      game[bowler.id] = { frames, total };
+    });
+    games.push(game);
+  });
+
+  return games; // Array of 3 game objects
+}
+
+function calcVerifyHangings(games, participating) {
+  const h = {}; participating.forEach(bid => h[bid] = 0);
+  let pendingAll4 = false;
+
+  for (let g = 0; g < 3; g++) {
+    for (let f = 0; f < 10; f++) {
+      const b1s = {};
+      participating.forEach(bid => { b1s[bid] = (games[g]?.[bid]?.frames?.[f]?.[0] || '').trim(); });
+      const strikers = new Set(participating.filter(bid => b1s[bid] === 'X'));
+
+      // Pending all-4 from previous frame
+      if (pendingAll4) {
+        let lowest = 11;
+        participating.forEach(bid => { const v = ballVal(b1s[bid]); if (v < lowest) lowest = v; });
+        participating.forEach(bid => { if (ballVal(b1s[bid]) === lowest) h[bid]++; });
+        pendingAll4 = false;
+      }
+
+      // Solo non-striker
+      if (strikers.size === 3) {
+        const ns = participating.find(bid => !strikers.has(bid));
+        if (ns) h[ns]++;
+      }
+
+      // All-4 → set up next frame
+      if (strikers.size === 4) {
+        if (f < 9) { pendingAll4 = true; }
+        else if (g < 2) { pendingAll4 = true; } // carry to next game
+        // Game 3 frame 10: skip
+      }
+    }
+  }
+  return h;
+}
+
+function calcVerifyXXXX(games, participating) {
+  const x = {}; participating.forEach(bid => x[bid] = 0);
+
+  for (let g = 0; g < 3; g++) {
+    participating.forEach(bid => {
+      const seq = [];
+      for (let f = 0; f < 9; f++) seq.push((games[g]?.[bid]?.frames?.[f]?.[0] || '').trim() === 'X');
+      // Frame 10: up to 3 balls
+      const f10 = games[g]?.[bid]?.frames?.[9] || [];
+      seq.push((f10[0]||'').trim() === 'X');
+      if ((f10[0]||'').trim() === 'X') seq.push((f10[1]||'').trim() === 'X');
+      if ((f10[0]||'').trim() === 'X' && (f10[1]||'').trim() === 'X') seq.push((f10[2]||'').trim() === 'X');
+
+      let consec = 0, instances = 0;
+      seq.forEach(s => { if (s) { consec++; if (consec >= 4) instances++; } else consec = 0; });
+      x[bid] += instances;
+    });
+  }
+  return x;
+}
+
+async function fetchAndVerify() {
   const url = $('vurl').value.trim();
   if (!url) { alert('Paste a URL first.'); return; }
-  const wn = S.currentWeek;
-  const w  = wn ? gw(wn) : null;
-  const bowlers = w ? S.bowlers.filter(b=>w.participating.includes(b.id)) : S.bowlers;
-  const bstr = bowlers.map(b=>`${b.name}=${b.id}:avg=${w?.avgs?.[b.id]||b.avg}`).join(',');
-  const prompt = `VERIFY_SCORES|url=${url}|bowlers=${bstr}|week=${wn||1}`;
-  $('vptxt').value = prompt;
-  $('vpout').style.display = '';
-}
 
-function copyVerify() {
-  navigator.clipboard.writeText($('vptxt').value).then(()=>alert('Copied!'));
-}
+  const btn = $('verify-btn');
+  const status = $('verify-status');
+  btn.disabled = true; btn.textContent = 'Fetching…';
+  status.textContent = 'Contacting score server…';
+  $('verify-results').innerHTML = '';
 
-function applyVerify() {
-  const raw   = $('vrin').value.trim();
-  const match = raw.match(/VERIFY_RESULT\|(\{[\s\S]+\})/);
-  if (!match) { alert('Could not find VERIFY_RESULT|{...}'); return; }
-  let res; try { res = JSON.parse(match[1]); } catch(e) { alert('Invalid JSON'); return; }
+  try {
+    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const resp = await fetch(proxy);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const html = data.contents;
+    if (!html) throw new Error('Empty response from proxy');
 
-  const wn = S.currentWeek; const w = wn ? gw(wn) : null;
-  let html = '<table class="vtbl"><thead><tr><th>Bowler</th><th>Hangings</th><th>XXXX</th><th>Flags</th></tr></thead><tbody>';
-  S.bowlers.forEach(b => {
-    const r = res[b.id]; if (!r) return;
-    const lh = w?.hangings?.[b.id] || 0;
-    const lx = countInf(b.id, 'xxxx', wn);
-    const flags=[];
-    if(r.swept)    flags.push('<span class="flg">SWEPT</span>');
-    if(r.highGame) flags.push('<span class="flg">HIGH</span>');
-    if(r.lowGame)  flags.push('<span class="flg">LOW</span>');
-    if(r.under500) flags.push('<span class="flg">U500</span>');
-    html += `<tr>
-      <td><span class="dot" style="background:${b.color};margin-right:4px"></span>${b.initials}</td>
-      <td class="${lh===r.hangings?'ok':'bad'}">${lh}/${r.hangings}</td>
-      <td class="${lx===r.xxxx?'ok':'bad'}">${lx}/${r.xxxx}</td>
-      <td>${flags.join(' ')||'—'}</td>
-    </tr>`;
-  });
-  html += '</tbody></table>';
-  $('vcmp').innerHTML = html;
+    status.textContent = 'Parsing scores…';
+    const games = parseScoreSheet(html);
+
+    if (!games.length) throw new Error('No score tables found — wrong URL?');
+
+    const wn = editingWeek || S.currentWeek;
+    const w  = wn ? gw(wn) : null;
+    const participating = w?.participating || S.bowlers.map(b => b.id);
+    const avgs = w?.avgs || Object.fromEntries(S.bowlers.map(b => [b.id, b.avg]));
+
+    const calcH = calcVerifyHangings(games, participating);
+    const calcX = calcVerifyXXXX(games, participating);
+
+    // Game totals per bowler
+    const gameTotals = {}; // bowlerId → [g1, g2, g3]
+    participating.forEach(bid => {
+      gameTotals[bid] = [0,1,2].map(g => games[g]?.[bid]?.total || 0);
+    });
+
+    // Flags
+    const flags = {};
+    participating.forEach(bid => {
+      const tots = gameTotals[bid];
+      const total3 = tots.reduce((a,b)=>a+b,0);
+      const avg = avgs[bid] || 0;
+      const highGame = tots.some(t => t >= avg + 50);
+      const lowGame  = tots.some(t => t > 0 && t <= avg - 50);
+      const under500 = total3 > 0 && total3 < 500;
+      // Swept: lowest score in all 3 games
+      const swept = [0,1,2].every(g => {
+        const myScore = games[g]?.[bid]?.total || 0;
+        if (!myScore) return false;
+        return participating.every(oid => (games[g]?.[oid]?.total || 0) >= myScore);
+      });
+      flags[bid] = { highGame, lowGame, under500, swept };
+    });
+
+    // Logged values
+    const logH = bid => w?.hangings?.[bid] || 0;
+    const logX = bid => countInf(bid, 'xxxx', wn);
+
+    // Render results
+    let html2 = '';
+    participating.forEach(bid => {
+      const b = gb(bid); if (!b) return;
+      const lh = logH(bid), ch = calcH[bid] || 0;
+      const lx = logX(bid), cx = calcX[bid] || 0;
+      const fl = flags[bid];
+      const fTags = [
+        fl.highGame ? `<span class="flg">HIGH GAME</span>` : '',
+        fl.lowGame  ? `<span class="flg">LOW GAME</span>`  : '',
+        fl.under500 ? `<span class="flg">UNDER 500</span>` : '',
+        fl.swept    ? `<span class="flg">SWEPT</span>`     : '',
+      ].filter(Boolean);
+      const tots = gameTotals[bid];
+
+      html2 += `<div class="card" style="border-left:4px solid ${b.color};margin-bottom:10px">
+        <div class="ch" style="gap:8px">
+          <span class="dot" style="background:${b.color}"></span>
+          <span style="flex:1">${b.name}</span>
+          <span class="sm">${tots[0]} / ${tots[1]} / ${tots[2]} = ${tots.reduce((a,c)=>a+c,0)}</span>
+        </div>
+        <div class="cb" style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:12px;align-items:center">
+            <span style="flex:1;font-weight:600">🪝 Hangings</span>
+            <span class="${lh===ch?'ok':'bad'}" style="font-size:1rem;font-weight:700">Logged ${lh} / Calc ${ch}</span>
+          </div>
+          <div style="display:flex;gap:12px;align-items:center">
+            <span style="flex:1;font-weight:600">✖️ XXXX</span>
+            <span class="${lx===cx?'ok':'bad'}" style="font-size:1rem;font-weight:700">Logged ${lx} / Calc ${cx}</span>
+          </div>
+          ${fTags.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${fTags.join('')}</div>` : ''}
+        </div>
+      </div>`;
+    });
+
+    $('verify-results').innerHTML = html2;
+    status.textContent = `✓ Verified ${games.length} games`;
+  } catch(e) {
+    status.textContent = `Error: ${e.message}`;
+    console.error(e);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Fetch & Verify';
+  }
 }
 
 function countInf(bid, iid, wn) {
