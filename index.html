@@ -845,7 +845,10 @@ function parseScoreSheet(html) {
     const game = {};
     gt.querySelectorAll('tr.notranslate').forEach(row => {
       const nameEl = row.querySelector('.cls_player'); if (!nameEl) return;
-      const bowler = matchBowler(nameEl.textContent.trim()); if (!bowler) return;
+      const rawName = nameEl.textContent.trim();
+      const bowler = matchBowler(rawName);
+      console.log(`Table ${games.length}: "${rawName}" → ${bowler?.id || 'no match'}`);
+      if (!bowler) return;
 
       const frames = [];
 
@@ -870,7 +873,10 @@ function parseScoreSheet(html) {
         if (tot) total = parseInt(tot.textContent.trim()) || 0;
       });
 
-      game[bowler.id] = { frames, total };
+      // Don't overwrite real data with a blank/zero row (e.g. substitute with same last name)
+      if (!game[bowler.id] || total > 0) {
+        game[bowler.id] = { frames, total };
+      }
     });
     games.push(game);
   });
