@@ -935,12 +935,33 @@ async function fetchAndVerify() {
   $('verify-results').innerHTML = '';
 
   try {
-    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const resp = await fetch(proxy);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data = await resp.json();
-    const html = data.contents;
-    if (!html) throw new Error('Empty response from proxy');
+    let html = null;
+
+    // Try proxies in order
+    const proxies = [
+      async () => {
+        const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+        if (!r.ok) throw new Error();
+        const d = await r.json();
+        return d.contents || null;
+      },
+      async () => {
+        const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+        if (!r.ok) throw new Error();
+        return await r.text();
+      },
+      async () => {
+        const r = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`);
+        if (!r.ok) throw new Error();
+        return await r.text();
+      }
+    ];
+
+    for (const tryProxy of proxies) {
+      try { html = await tryProxy(); if (html) break; } catch(e) { /* try next */ }
+    }
+
+    if (!html) throw new Error('All proxies failed — check your network connection');
 
     status.textContent = 'Parsing scores…';
     const games = parseScoreSheet(html);
