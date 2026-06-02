@@ -984,15 +984,15 @@ async function fetchAndVerify() {
 
     if (!games.length) throw new Error('No score tables found — wrong URL?');
 
-    // Build debug info (appended after results)
-    let dbgHtml = `<div class="card" style="margin-top:12px"><div class="ch">Debug — Parsed Scores</div><div class="cb" style="font-family:monospace;font-size:0.75rem;white-space:pre-wrap">`;
-    dbgHtml += `Found ${games.length} game table(s)\n`;
+    // Debug alert
+    let dbgTxt = `Found ${games.length} game table(s)`;
     games.forEach((g, i) => {
-      dbgHtml += `\nGame ${i+1}:\n`;
-      if (!Object.keys(g).length) { dbgHtml += '  (no bowlers matched)\n'; }
-      Object.keys(g).forEach(bid => { dbgHtml += `  ${bid}: total=${g[bid].total}\n`; });
+      dbgTxt += `\n\nGame ${i+1}:`;
+      if (!Object.keys(g).length) { dbgTxt += '\n  (no bowlers matched)'; }
+      Object.keys(g).forEach(bid => { dbgTxt += `\n  ${bid}: total=${g[bid].total}`; });
     });
-    dbgHtml += `</div></div>`;
+    alert(dbgTxt);
+    let dbgHtml = '';
 
     const wn = editingWeek || S.currentWeek;
     const w  = wn ? gw(wn) : null;
