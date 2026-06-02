@@ -622,6 +622,7 @@ function rAdmin() {
 
 // ── Tab nav ───────────────────────────────────────────────────────────────────
 function tab(name, el) {
+  if (name !== 'admin') adminUnlocked = false;
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.tb').forEach(b=>b.classList.remove('on'));
   $(`pane-${name}`).classList.add('on');
@@ -669,13 +670,6 @@ function checkPin() {
     pinBuf = '';
     updatePinDots();
   }
-}
-
-// Lock admin when switching away
-const _origTab = tab;
-function tab(name, el) {
-  if (name !== 'admin') adminUnlocked = false;
-  _origTab(name, el);
 }
 
 // ── Game selector ─────────────────────────────────────────────────────────────
