@@ -155,6 +155,10 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 
   <!-- LIVE -->
   <div id="pane-live" class="pane on">
+    <div id="edit-banner" style="display:none;background:rgba(245,158,11,.15);border:1px solid #F59E0B;border-radius:8px;padding:8px 12px;margin-bottom:10px;display:none;align-items:center;gap:10px">
+      <span style="flex:1;font-weight:600;color:#F59E0B">✏️ Editing Week <span id="edit-wn-label"></span></span>
+      <button class="btn" style="background:#F59E0B;color:#000;padding:6px 14px;font-size:0.85rem" onclick="doneEditing()">Done</button>
+    </div>
     <button id="swbtn" class="btn bp bw" style="margin-bottom:12px">Start Week 1</button>
     <div class="game-sel">
       <div class="gbtn on" data-g="0">Game 1</div>
@@ -386,6 +390,9 @@ let pinBuf = '';
 let pinTabEl = null;
 let adminUnlocked = false;
 
+// ── Edit mode ─────────────────────────────────────────────────────────────────
+let editingWeek = null;
+
 // ── Utils ─────────────────────────────────────────────────────────────────────
 const $  = id => document.getElementById(id);
 const gi = id => S.infractions.find(i => i.id === id);
@@ -496,11 +503,22 @@ function rHdr() {
 }
 
 function rLive() {
-  const wn = S.currentWeek;
+  const wn = editingWeek || S.currentWeek;
   const w  = wn ? gw(wn) : null;
   const btn = $('swbtn');
 
-  if (wn >= 36 && w?.closed) {
+  // Edit banner
+  const banner = $('edit-banner');
+  if (editingWeek) {
+    banner.style.display = 'flex';
+    $('edit-wn-label').textContent = editingWeek;
+  } else {
+    banner.style.display = 'none';
+  }
+
+  if (editingWeek) {
+    btn.style.display = 'none';
+  } else if (wn >= 36 && w?.closed) {
     btn.style.display = 'none';
   } else {
     btn.style.display = '';
@@ -609,9 +627,12 @@ function rHistory() {
   $('wlog').innerHTML = wns.length ? wns.map(wn => {
     const w = S.weeks[wn];
     const fees = S.bowlers.map(b=>`<span style="color:${b.color}">${b.initials}:${$f(feesFor(b.id,wn))}</span>`).join(' ');
-    return `<div class="feerow" style="flex-direction:column;align-items:flex-start">
-      <div style="font-weight:600">Week ${wn} <span class="sm">${w.date||''}</span></div>
-      <div class="sm" style="margin-top:2px">${fees}</div>
+    return `<div class="feerow">
+      <div style="flex:1">
+        <div style="font-weight:600">Week ${wn} <span class="sm">${w.date||''}</span></div>
+        <div class="sm" style="margin-top:2px">${fees}</div>
+      </div>
+      <button class="btn" style="background:var(--surface2);color:var(--text);font-size:0.8rem;padding:6px 12px" onclick="editWeek(${wn})">✏️ Edit</button>
     </div>`;
   }).join('') : '<div class="sm">No weeks logged.</div>';
 }
@@ -629,12 +650,25 @@ function rAdmin() {
 // ── Tab nav ───────────────────────────────────────────────────────────────────
 function tab(name, el) {
   if (name !== 'admin') adminUnlocked = false;
+  if (name !== 'live') editingWeek = null;
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.tb').forEach(b=>b.classList.remove('on'));
   $(`pane-${name}`).classList.add('on');
   el.classList.add('on');
   if (name==='night')   rNight();
   if (name==='history') rHistory();
+}
+
+// ── Edit past week ────────────────────────────────────────────────────────────
+function editWeek(wn) {
+  editingWeek = wn;
+  tab('live', document.querySelector('.tb[data-t="live"]'));
+}
+
+function doneEditing() {
+  editingWeek = null;
+  save();
+  tab('history', document.querySelector('.tb[data-t="history"]'));
 }
 
 // ── Admin PIN ─────────────────────────────────────────────────────────────────
@@ -716,7 +750,7 @@ function confirmSW() {
 
 // ── Frame modal ───────────────────────────────────────────────────────────────
 function openFrame(bid, gidx, fidx) {
-  const w = gw(S.currentWeek); if (!w) return;
+  const w = gw(editingWeek || S.currentWeek); if (!w) return;
   fmCtx = { bid, gidx, fidx };
   const b = gb(bid);
   $('fm-title').textContent = `${b.name} — G${gidx+1} F${fidx+1}`;
@@ -753,7 +787,7 @@ function updHang() {
 
 function saveFrame() {
   const { bid, gidx, fidx } = fmCtx;
-  const w = gw(S.currentWeek); if (!w) return;
+  const w = gw(editingWeek || S.currentWeek); if (!w) return;
   if (!w.hangings) w.hangings = {};
   w.hangings[bid] = fmHang;
   if (!w.games[gidx]) w.games[gidx] = {};
