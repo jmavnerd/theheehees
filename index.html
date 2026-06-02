@@ -1065,7 +1065,7 @@ async function fetchAndVerify() {
       </div>`;
     });
 
-    $('verify-results').innerHTML = html2 + dbgHtml;
+    $('verify-results').innerHTML = dbgHtml + html2;
     status.textContent = `✓ Verified ${games.length} games`;
   } catch(e) {
     status.textContent = `Error: ${e.message}`;
