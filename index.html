@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v5</title>
+<title>Hee Hees v6</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -144,11 +144,16 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v5</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v6</span></h1>
   <div style="display:flex;align-items:center;gap:8px">
     <span id="week-badge">—</span>
     <span id="sync-dot" class="s-ok">✓</span>
   </div>
+</div>
+
+<div id="save-alert" style="display:none;background:#ef4444;color:#fff;font-weight:700;font-size:0.8rem;text-align:center;padding:8px 12px;line-height:1.35">
+  ⚠️ NOT SYNCING — data saved on THIS device only.<br>
+  <span style="font-weight:500">Keep using this same device. Don't close this tab until it clears.</span>
 </div>
 
 <div id="content">
@@ -323,6 +328,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 const SB_URL = 'https://cvecpzmeqtitvaltrmzh.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2ZWNwem1lcXRpdHZhbHRybXpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MTIyNTUsImV4cCI6MjA5NTk4ODI1NX0.xNpWkCVq1x-FnTNovGnpEGL0SPWTumK5eI5sqyqD6ec';
 const ROW_ID = 'hh12';
+const LS_KEY = 'hh12';   // local backup — survives a paused/unreachable backend
 const sb = window.supabase.createClient(SB_URL, SB_KEY);
 
 // ── Default state ─────────────────────────────────────────────────────────────
@@ -371,6 +377,7 @@ let fmHang = 0;
 let fmInfs = new Set();
 let saveT = null;
 let saving = false;
+let dirty = false;   // true when local has changes not yet confirmed saved to the backend
 
 // ── Admin PIN ─────────────────────────────────────────────────────────────────
 const ADMIN_PIN = '6969';
@@ -440,21 +447,84 @@ function seasonTotals() {
   return out;
 }
 
-// ── Supabase ──────────────────────────────────────────────────────────────────
+// ── Persistence ───────────────────────────────────────────────────────────────
+// Two layers:
+//   1. localStorage — synchronous, always written on every change. Can't fail,
+//      survives a paused / unreachable Supabase. This is the safety net.
+//   2. Supabase — shared across devices. Best-effort; if it fails the app keeps
+//      working from local and shows a loud banner.
+// Reconciliation is by S._ts (ms epoch), stamped on every save().
+
 function syncDot(s) {
   const el = $('sync-dot');
   el.className = s === 'ok' ? 's-ok' : s === 'sav' ? 's-sav' : 's-err';
   el.textContent = s === 'ok' ? '✓' : s === 'sav' ? '↑' : '!';
 }
 
+function showSaveAlert() { const el = $('save-alert'); if (el) el.style.display = 'block'; }
+function hideSaveAlert() { const el = $('save-alert'); if (el) el.style.display = 'none'; }
+
+function writeLocal() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(S)); }
+  catch (e) { console.error('localStorage write failed', e); }
+}
+
+function readLocal() {
+  try { const raw = localStorage.getItem(LS_KEY); return raw ? JSON.parse(raw) : null; }
+  catch (e) { console.error('localStorage read failed', e); return null; }
+}
+
+function tsOf(state, updatedAt) {
+  return (state && state._ts) || (updatedAt ? Date.parse(updatedAt) : 0) || 0;
+}
+
 async function loadState() {
   syncDot('sav');
+
+  const local = readLocal();
+
+  let remote = null, remoteErr = null;
   try {
-    const { data, error } = await sb.from('hee_hees_state').select('state').eq('id', ROW_ID).single();
+    const { data, error } = await sb.from('hee_hees_state').select('state,updated_at').eq('id', ROW_ID).single();
     if (error && error.code !== 'PGRST116') throw error;
-    if (data?.state) S = data.state;
-    syncDot('ok');
-  } catch(e) { console.error(e); syncDot('err'); }
+    if (data?.state) remote = data;
+  } catch (e) { remoteErr = e; console.error(e); }
+
+  const localTs  = local ? tsOf(local) : 0;
+  const remoteTs = remote ? tsOf(remote.state, remote.updated_at) : 0;
+
+  if (remote && remoteTs >= localTs) {
+    // Backend is current (or ahead) — trust it.
+    S = remote.state;
+    writeLocal();
+    dirty = false;
+    syncDot('ok'); hideSaveAlert();
+  } else if (local) {
+    // Local is ahead of the backend, OR the backend is unreachable.
+    // Either way, local is the source of truth right now.
+    S = local;
+    if (remoteErr) {
+      // Can't reach backend — keep working locally, warn loudly, retry on next save.
+      dirty = true;
+      syncDot('err'); showSaveAlert();
+    } else {
+      // Backend reachable but stale (e.g. saves failed last session while paused).
+      // Push our newer local copy up to catch it up.
+      dirty = true;
+      pushState();
+    }
+  } else if (remote) {
+    S = remote.state;
+    writeLocal();
+    dirty = false;
+    syncDot('ok'); hideSaveAlert();
+  } else {
+    // Nothing anywhere.
+    S = JSON.parse(JSON.stringify(DEFAULTS));
+    if (remoteErr) { syncDot('err'); showSaveAlert(); }
+    else { syncDot('ok'); }
+  }
+
   render();
 }
 
@@ -463,21 +533,48 @@ async function pushState() {
   try {
     const { error } = await sb.from('hee_hees_state').upsert({ id: ROW_ID, state: S, updated_at: new Date().toISOString() });
     if (error) throw error;
-    syncDot('ok');
-  } catch(e) { console.error(e); syncDot('err'); }
+    dirty = false;
+    syncDot('ok'); hideSaveAlert();
+  } catch (e) {
+    console.error(e);
+    syncDot('err'); showSaveAlert();
+    // Leave dirty = true; a later save() or flush() will retry.
+  }
   saving = false;
 }
 
 function save() {
+  S._ts = Date.now();
+  writeLocal();          // 1. local first — synchronous, guaranteed
+  dirty = true;
   clearTimeout(saveT);
   syncDot('sav');
-  saveT = setTimeout(pushState, 500);
+  saveT = setTimeout(pushState, 500);   // 2. backend, debounced
 }
+
+// Best-effort flush when the tab is being hidden / closed (screen lock, app
+// switch, close). localStorage is already up to date; this just tries to get
+// the last debounced push out before the tab is frozen.
+function flush() {
+  if (!dirty) return;
+  writeLocal();
+  clearTimeout(saveT);
+  pushState();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+window.addEventListener('pagehide', flush);
 
 function subscribe() {
   sb.channel('hh12')
     .on('postgres_changes', { event:'*', schema:'public', table:'hee_hees_state', filter:`id=eq.${ROW_ID}` }, p => {
-      if (p.new?.state && !saving) { S = p.new.state; render(); }
+      if (!p.new?.state) return;
+      if (saving) return;   // our own write echoing back
+      if (dirty)  return;   // we have unpushed local changes — don't let another device clobber them
+      const inTs = tsOf(p.new.state, p.new.updated_at);
+      if (inTs <= (S._ts || 0)) return;   // not newer than what we already have
+      S = p.new.state;
+      writeLocal();
+      render();
     })
     .subscribe();
 }
