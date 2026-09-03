@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v32</title>
+<title>Hee Hees v33</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -170,7 +170,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v32</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v33</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -580,12 +580,31 @@ function feesFor(bid, wn) {
   return t;
 }
 
-// Fees a bowler has racked up in ONE game (frame infractions they committed +
-// team-infraction shares from others that game). Hangings/absent/over-10 are
-// night-level and not included.
+// A bowler's hang fees that fall in ONE game. Hangs are walked in order
+// (game → frame); the k-th one costs [.5,1,2,4,8,16][k%6]. Summed over the 3
+// games this equals hangVal(total hang count).
+function gameHangFee(bid, wn, g) {
+  const w = gw(wn); if (!w) return 0;
+  const sc = [.5, 1, 2, 4, 8, 16];
+  let k = 0, t = 0;
+  for (let gg = 0; gg < 3; gg++) {
+    const bg = w.games?.[gg]?.[bid];
+    for (let f = 0; f < 10; f++) {
+      if ((bg?.frames?.[f] || []).includes('hung')) {
+        if (gg === g) t += sc[k % 6];
+        k++;
+      }
+    }
+  }
+  return t;
+}
+
+// Fees a bowler has racked up in ONE game: frame infractions they committed +
+// team-infraction shares from others that game + their hang increments that
+// game. (Absent / over-10-pin are night/season level and not included.)
 function gameFeeFor(bid, wn, g) {
   const w = gw(wn); if (!w) return 0;
-  let t = 0;
+  let t = gameHangFee(bid, wn, g);
   const bg = w.games?.[g]?.[bid];
   if (bg) for (let f = 0; f < 10; f++) for (const iid of (bg.frames?.[f] || [])) {
     const inf = gi(iid); if (inf?.type === 'player') t += inf.fee;
