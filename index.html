@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v9</title>
+<title>Hee Hees v10</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -150,7 +150,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v9</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v10</span></h1>
   <div style="display:flex;align-items:center;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -172,13 +172,13 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
       <span style="flex:1;font-weight:600;color:#F59E0B">✏️ Editing Week <span id="edit-wn-label"></span></span>
       <button class="btn" style="background:#F59E0B;color:#000;padding:6px 14px;font-size:0.85rem" onclick="doneEditing()">Done</button>
     </div>
-    <button id="swbtn" class="btn bp bw" style="margin-bottom:12px">Start Week 1</button>
     <div class="game-sel">
       <div class="gbtn on" data-g="0">Game 1</div>
       <div class="gbtn" data-g="1">Game 2</div>
       <div class="gbtn" data-g="2">Game 3</div>
     </div>
     <div id="bgrid"></div>
+    <button id="swbtn" class="btn bp bw" style="margin-top:22px">Start Week 1</button>
   </div>
 
   <!-- VERIFY -->
@@ -725,7 +725,7 @@ function rLive() {
 
   const grid = $('bgrid');
   if (!w) {
-    grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Tap Start Week to begin</div>';
+    grid.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted)">No active week.<br>Use the button below to start one.</div>';
     return;
   }
 
