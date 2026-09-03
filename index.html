@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v7</title>
+<title>Hee Hees v8</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -144,7 +144,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v7</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v8</span></h1>
   <div style="display:flex;align-items:center;gap:8px">
     <span id="week-badge">—</span>
     <span id="sync-dot" class="s-ok">✓</span>
@@ -416,16 +416,24 @@ function hangVal(n) {
 
 function infVisible(inf, bid) {
   if (inf.id === 'absent') return false;
-  if (inf.id === 'over10pin' && S.currentWeek !== 36) return false;
+  if (inf.id === 'over10pin') return false;   // auto-assessed at Week 36 in feesFor, never a manual toggle
   if (inf.onlyFor    && !inf.onlyFor.includes(bid))    return false;
   if (inf.excludeFor &&  inf.excludeFor.includes(bid)) return false;
   return true;
 }
 
+// Over-10-pin drop: the Week 36 weekly average is 10+ pins below the Week 1
+// weekly average for that bowler. Assessed on Week 36 only.
+function overTenDrop(bid) {
+  const start = gw(1)?.avgs?.[bid];
+  const end   = gw(36)?.avgs?.[bid];
+  return start != null && end != null && end <= start - 10;
+}
+
 function feesFor(bid, wn) {
   const w = gw(wn); if (!w) return 0;
   let t = 0;
-  if (w.absent?.includes(bid)) t += 10;
+  if (w.absent?.includes(bid)) t += (gi('absent')?.fee ?? 10);
   for (let g = 0; g < 3; g++) {
     const bg = w.games?.[g]?.[bid];
     if (!bg) continue;
@@ -449,6 +457,7 @@ function feesFor(bid, wn) {
     }
   }
   t += hangVal(w.hangings?.[bid] || 0);
+  if (wn === 36 && overTenDrop(bid)) t += (gi('over10pin')?.fee ?? 25);
   return t;
 }
 
@@ -581,9 +590,21 @@ function flush() {
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
 window.addEventListener('pagehide', flush);
 
+// Realtime sync with auto-reconnect. The websocket drops all the time on
+// mobile (screen lock, network switch); without this it stays dead until a
+// full reload and the device silently stops seeing other people's changes.
+let rtChannel = null;
+let rtGen = 0;      // guards against stale callbacks from a superseded channel
+let rtRetry = 0;
+let rtTimer = null;
+
 function subscribe() {
   if (!sb) return;   // local-only mode — no realtime channel
-  sb.channel('hh12')
+  const gen = ++rtGen;
+  if (rtTimer) { clearTimeout(rtTimer); rtTimer = null; }
+  if (rtChannel) { try { sb.removeChannel(rtChannel); } catch (e) {} rtChannel = null; }
+
+  rtChannel = sb.channel('hh12')
     .on('postgres_changes', { event:'*', schema:'public', table:'hee_hees_state', filter:`id=eq.${ROW_ID}` }, p => {
       if (!p.new?.state) return;
       if (saving) return;   // our own write echoing back
@@ -594,8 +615,41 @@ function subscribe() {
       writeLocal();
       render();
     })
-    .subscribe();
+    .subscribe(status => {
+      if (gen !== rtGen) return;   // a newer subscribe() has superseded this channel
+      if (status === 'SUBSCRIBED') {
+        rtRetry = 0;
+        pullRemote();   // catch up on anything missed while disconnected
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        scheduleResubscribe();
+      }
+    });
 }
+
+function scheduleResubscribe() {
+  if (rtTimer || !sb) return;
+  const delay = Math.min(30000, 1000 * 2 ** rtRetry);   // 1s, 2s, 4s … capped at 30s
+  rtRetry++;
+  rtTimer = setTimeout(() => { rtTimer = null; subscribe(); }, delay);
+}
+
+// Pull the row on demand and adopt it only if it's newer than what we hold.
+async function pullRemote() {
+  if (!sb || dirty || saving) return;
+  try {
+    const { data, error } = await sb.from('hee_hees_state').select('state,updated_at').eq('id', ROW_ID).single();
+    if (error) return;
+    if (data?.state && tsOf(data.state, data.updated_at) > (S._ts || 0)) {
+      S = data.state; writeLocal(); render();
+    }
+  } catch (e) { /* offline — the realtime status handler will retry */ }
+}
+
+// Coming back to the foreground (phone wake, app switch): reconnect now and
+// pull, rather than waiting out the backoff.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && sb) { rtRetry = 0; subscribe(); }
+});
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function render() { rHdr(); rLive(); rNight(); rHistory(); rAdmin(); }
@@ -707,11 +761,13 @@ function rNight() {
   S.bowlers.forEach(b => {
     const fee = feesFor(b.id, wn); grand += fee;
     const hang = w.hangings?.[b.id] || 0;
+    const over10 = wn === 36 && overTenDrop(b.id);
     html += `<div class="feerow">
       <span class="dot" style="background:${b.color}"></span>
       <div style="flex:1">
         <div style="font-weight:600">${b.name}</div>
         ${hang>0?`<div class="sm">🪝 ${hang} hang${hang>1?'s':''} (${$f(hangVal(hang))})</div>`:''}
+        ${over10?`<div class="sm" style="color:#ef4444">📉 Over 10-pin drop (${$f(gi('over10pin')?.fee ?? 25)})</div>`:''}
       </div>
       <span class="famount">${$f(fee)}</span>
     </div>`;
