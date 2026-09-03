@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v34</title>
+<title>Hee Hees v35</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -170,8 +170,9 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v34</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v35</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
+    <button class="fsbtn" id="sndbtn" onclick="toggleSnd()" aria-label="Toggle sound">🔊</button>
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
     <span id="week-badge">—</span>
@@ -469,6 +470,41 @@ function setFS(dir) {
   try { v = parseFloat(localStorage.getItem(FS_KEY)) || 1; } catch (e) {}
   applyFS(v);
 })();
+
+// ── Cha-ching on save ────────────────────────────────────────────────────────
+let sndOn = true;
+try { sndOn = localStorage.getItem('hh_snd') !== '0'; } catch (e) {}
+
+function chaChing() {
+  if (!sndOn) return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    const ctx = chaChing._ctx || (chaChing._ctx = new AC());
+    if (ctx.state === 'suspended') ctx.resume();
+    const t0 = ctx.currentTime;
+    const ding = (t, freq, dur, peak) => {
+      [freq, freq * 2.005].forEach((f, i) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'triangle'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(i ? peak * 0.4 : peak, t + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g).connect(ctx.destination);
+        o.start(t); o.stop(t + dur + 0.03);
+      });
+    };
+    ding(t0,        988, 0.17, 0.22);   // B5  — "cha"
+    ding(t0 + 0.11, 1319, 0.5, 0.2);    // E6  — "chinggg"
+  } catch (e) {}
+}
+
+function toggleSnd() {
+  sndOn = !sndOn;
+  try { localStorage.setItem('hh_snd', sndOn ? '1' : '0'); } catch (e) {}
+  const b = $('sndbtn'); if (b) b.textContent = sndOn ? '🔊' : '🔇';
+  if (sndOn) chaChing();   // confirm + unlock audio on this gesture
+}
+(function initSnd() { const b = document.getElementById('sndbtn'); if (b) b.textContent = sndOn ? '🔊' : '🔇'; })();
 
 // ── Admin PIN ─────────────────────────────────────────────────────────────────
 const ADMIN_PIN = '6969';
@@ -1345,6 +1381,7 @@ function saveFrame() {
   w.games[gidx][bid].frames[fidx] = [...fmInfs];
   if (!w.hangings) w.hangings = {};
   w.hangings[bid] = hungCountW(bid, w);   // keep the denormalised night total in sync
+  chaChing();
   closeM('m-frame'); save(); rLive();
 }
 
