@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v21</title>
+<title>Hee Hees v22</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -165,7 +165,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v21</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v22</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -247,8 +247,18 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
       <div id="adm-bowlers" class="cb"></div>
     </div>
     <div class="card mt12">
-      <div class="ch">Infraction Fees</div>
+      <div class="ch">Infractions</div>
       <div id="adm-infs" class="cb"></div>
+      <div class="cb" style="border-top:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:center;gap:6px">
+        <input type="text" id="ni-name" placeholder="New infraction name" style="flex:1;min-width:120px" />
+        <select id="ni-type" class="ainp" style="width:5.5rem;text-align:left">
+          <option value="player">Player</option>
+          <option value="team">Team</option>
+        </select>
+        <span class="sm">$</span>
+        <input type="number" id="ni-fee" class="ainp" value="1.00" min="0" step="0.25" />
+        <button class="btn bs" style="padding:6px 14px;font-size:0.85rem" onclick="addInfraction()">Add</button>
+      </div>
     </div>
     <button class="btn bp bw mt16" onclick="saveAdmin()">Save Changes</button>
     <div style="margin-top:24px;padding:12px;background:var(--surface2);border-radius:8px;">
@@ -403,6 +413,8 @@ const DEFAULTS = {
   ],
   weeks: {}
 };
+
+const BUILTIN_INF_IDS = new Set(DEFAULTS.infractions.map(i => i.id));   // these can't be deleted from Admin
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let S = JSON.parse(JSON.stringify(DEFAULTS));
@@ -1050,8 +1062,35 @@ function rAdmin() {
     `<div class="arow"><span class="dot" style="background:${col(b)}"></span><span style="flex:1">${b.name}</span><input class="ainp" data-bid="${b.id}" type="number" value="${b.avg}" min="0" max="300"/></div>`
   ).join('');
   $('adm-infs').innerHTML = S.infractions.map(inf =>
-    `<div class="arow"><span style="flex:1;font-size:13px">${inf.name}</span><span class="badge ${inf.type==='team'?'bp2':'ba'}">${inf.type}</span><span class="sm" style="margin-right:2px">$</span><input class="ainp" data-iid="${inf.id}" type="number" value="${inf.fee.toFixed(2)}" min="0" step="0.25"/></div>`
+    `<div class="arow">
+      <input class="ainp" data-name-iid="${inf.id}" type="text" value="${inf.name.replace(/"/g,'&quot;')}" style="flex:1;width:auto;min-width:0;text-align:left" />
+      <span class="badge ${inf.type==='team'?'bp2':'ba'}">${inf.type}</span>
+      <span class="sm" style="margin-right:2px">$</span>
+      <input class="ainp" data-iid="${inf.id}" type="number" value="${inf.fee.toFixed(2)}" min="0" step="0.25"/>
+      ${BUILTIN_INF_IDS.has(inf.id) ? '' : `<button class="btn bd" style="padding:3px 9px;font-size:0.9rem;line-height:1" onclick="delInfraction('${inf.id}')">×</button>`}
+    </div>`
   ).join('');
+}
+
+function addInfraction() {
+  const name = $('ni-name').value.trim();
+  if (!name) { alert('Give the infraction a name.'); return; }
+  const fee  = parseFloat($('ni-fee').value) || 0;
+  const type = $('ni-type').value === 'team' ? 'team' : 'player';
+  readAdminInputs();   // keep any pending name/fee edits in the other rows
+  let base = name.toLowerCase().replace(/[^a-z0-9]+/g, '') || 'inf';
+  let id = base, n = 2;
+  while (S.infractions.some(i => i.id === id)) id = base + (n++);
+  S.infractions.push({ id, name, fee, type });
+  $('ni-name').value = ''; $('ni-fee').value = '1.00'; $('ni-type').value = 'player';
+  save(); rAdmin();
+}
+
+function delInfraction(id) {
+  const inf = gi(id); if (!inf) return;
+  if (!confirm(`Delete "${inf.name}"? Any past week where it was logged loses that charge.`)) return;
+  S.infractions = S.infractions.filter(i => i.id !== id);
+  save(); render();
 }
 
 // ── Tab nav ───────────────────────────────────────────────────────────────────
@@ -1507,10 +1546,15 @@ function countInf(bid, iid, wn) {
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
-function saveAdmin() {
+function readAdminInputs() {
   S.season = $('adm-season').value.trim() || S.season;
   document.querySelectorAll('[data-bid]').forEach(inp => { const b=gb(inp.dataset.bid); if(b) b.avg=parseFloat(inp.value)||b.avg; });
+  document.querySelectorAll('[data-name-iid]').forEach(inp => { const i=gi(inp.dataset.nameIid); const v=inp.value.trim(); if(i && v) i.name=v; });
   document.querySelectorAll('[data-iid]').forEach(inp => { const i=gi(inp.dataset.iid); if(i) i.fee=parseFloat(inp.value)||i.fee; });
+}
+
+function saveAdmin() {
+  readAdminInputs();
   save(); render(); alert('Saved!');
 }
 
