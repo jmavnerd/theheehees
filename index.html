@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v6</title>
+<title>Hee Hees v7</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -144,7 +144,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v6</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v7</span></h1>
   <div style="display:flex;align-items:center;gap:8px">
     <span id="week-badge">—</span>
     <span id="sync-dot" class="s-ok">✓</span>
@@ -325,11 +325,23 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+// Fallback CDN if the primary didn't load (blocked network, CDN down, offline).
+if (!window.supabase) document.write('<script src="https://unpkg.com/@supabase/supabase-js@2"><\/script>');
+</script>
+<script>
 const SB_URL = 'https://cvecpzmeqtitvaltrmzh.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2ZWNwem1lcXRpdHZhbHRybXpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MTIyNTUsImV4cCI6MjA5NTk4ODI1NX0.xNpWkCVq1x-FnTNovGnpEGL0SPWTumK5eI5sqyqD6ec';
 const ROW_ID = 'hh12';
 const LS_KEY = 'hh12';   // local backup — survives a paused/unreachable backend
-const sb = window.supabase.createClient(SB_URL, SB_KEY);
+
+// The backend client is OPTIONAL. If supabase-js failed to load, sb stays null,
+// the app runs entirely from localStorage, and the "NOT SYNCING" banner stays
+// up. Every persistence call below tolerates sb === null.
+let sb = null;
+try {
+  if (window.supabase) sb = window.supabase.createClient(SB_URL, SB_KEY);
+  else console.error('supabase-js unavailable — running local-only');
+} catch (e) { console.error('supabase init failed — running local-only', e); }
 
 // ── Default state ─────────────────────────────────────────────────────────────
 const DEFAULTS = {
@@ -484,11 +496,15 @@ async function loadState() {
   const local = readLocal();
 
   let remote = null, remoteErr = null;
-  try {
-    const { data, error } = await sb.from('hee_hees_state').select('state,updated_at').eq('id', ROW_ID).single();
-    if (error && error.code !== 'PGRST116') throw error;
-    if (data?.state) remote = data;
-  } catch (e) { remoteErr = e; console.error(e); }
+  if (!sb) {
+    remoteErr = new Error('backend client unavailable');
+  } else {
+    try {
+      const { data, error } = await sb.from('hee_hees_state').select('state,updated_at').eq('id', ROW_ID).single();
+      if (error && error.code !== 'PGRST116') throw error;
+      if (data?.state) remote = data;
+    } catch (e) { remoteErr = e; console.error(e); }
+  }
 
   const localTs  = local ? tsOf(local) : 0;
   const remoteTs = remote ? tsOf(remote.state, remote.updated_at) : 0;
@@ -529,6 +545,7 @@ async function loadState() {
 }
 
 async function pushState() {
+  if (!sb) { syncDot('err'); showSaveAlert(); return; }   // local-only mode; dirty stays true
   saving = true; syncDot('sav');
   try {
     const { error } = await sb.from('hee_hees_state').upsert({ id: ROW_ID, state: S, updated_at: new Date().toISOString() });
@@ -565,6 +582,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 window.addEventListener('pagehide', flush);
 
 function subscribe() {
+  if (!sb) return;   // local-only mode — no realtime channel
   sb.channel('hh12')
     .on('postgres_changes', { event:'*', schema:'public', table:'hee_hees_state', filter:`id=eq.${ROW_ID}` }, p => {
       if (!p.new?.state) return;
@@ -868,8 +886,11 @@ function openHangOnly(bid) { openFrame(bid, curGame, 0); }
 function togInf(id, on) { on ? fmInfs.add(id) : fmInfs.delete(id); }
 
 function adjHang(d) {
-  const w = gw(S.currentWeek); if (!w || !fmCtx) return;
-  fmHang = Math.max(0, (w.hangings?.[fmCtx.bid] || 0) + d);
+  if (!fmCtx) return;
+  // Accumulate from the modal's working value — not the stored night total.
+  // The old version re-read w.hangings[bid] each press (stuck at ±1) and read
+  // S.currentWeek even when editing a past week (wrong week / no-op).
+  fmHang = Math.max(0, fmHang + d);
   updHang();
 }
 
@@ -1052,7 +1073,7 @@ async function fetchAndVerify() {
     // Try proxies in order — own Vercel function first, then public fallbacks
     const proxies = [
       async () => {
-        const r = await fetch(`https://theheehees-il896bgd7-jmavnerds-projects.vercel.app/api/proxy?url=${encodeURIComponent(url)}`);
+        const r = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`);
         if (!r.ok) throw new Error();
         return await r.text();
       },
