@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v27</title>
+<title>Hee Hees v28</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -167,7 +167,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v27</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v28</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -1039,29 +1039,30 @@ function rHistory() {
     </div>${sub}`;
   }).join('') || '<div class="sm">No data.</div>';
 
-  // Week Log — tap a bowler's chip for that week's itemized charges.
-  const wns = Object.keys(S.weeks).map(Number).sort((a,b)=>b-a);
+  // Week Log — one row per week, ascending; tap to expand the full breakdown.
+  const wns = Object.keys(S.weeks).map(Number).sort((a,b)=>a-b);
   $('wlog').innerHTML = wns.length ? wns.map(wn => {
     const w = S.weeks[wn];
+    const k = `w:${wn}`, open = histExpanded.has(k);
     const order = orderedBowlers(wn);
-    const chips = order.map(b => {
-      const k = `w:${wn}:${b.id}`;
-      return `<button class="fchipbtn ${histExpanded.has(k)?'on':''}" style="color:${col(b)}" onclick="toggleHist('${k}')">${b.initials}:${$f(feesFor(b.id,wn))}</button>`;
-    }).join(' ');
-    const panels = order.filter(b => histExpanded.has(`w:${wn}:${b.id}`)).map(b => {
-      const items = feeBreakdown(b.id, wn);
-      const rows = items.length ? exLines(items) : `<div class="exline sm"><span>No charges</span><span></span></div>`;
-      return `<div class="exsub"><div class="exhdr">${b.name} — Week ${wn}</div>${rows}
-        <div class="exline" style="border-top:1px solid var(--border);font-weight:700;margin-top:4px;padding-top:5px"><span>Total</span><span>${$f(feesFor(b.id,wn))}</span></div></div>`;
-    }).join('');
-    return `<div class="feerow">
-      <div style="flex:1">
-        <div style="font-weight:600">Week ${wn} <span class="sm">${w.date||''}</span></div>
-        <div class="sm" style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">${chips}</div>
-      </div>
-      <button class="btn" style="background:var(--surface2);color:var(--text);font-size:0.8rem;padding:6px 12px;margin-right:6px" onclick="editWeek(${wn})">✏️ Edit</button>
-      <button class="btn bd" style="font-size:0.8rem;padding:6px 12px" onclick="deleteWeek(${wn})">🗑️</button>
-    </div>${panels}`;
+    const wkTotal = order.reduce((s,b)=>s + feesFor(b.id,wn), 0);
+    let sub = '';
+    if (open) {
+      sub = `<div class="exsub">` + order.map(b => {
+        const items = feeBreakdown(b.id, wn);
+        const rows = items.length ? exLines(items) : `<div class="exline sm"><span>No charges</span><span></span></div>`;
+        return `<div class="exhdr" style="display:flex;justify-content:space-between;font-size:0.74rem">
+            <span style="color:${col(b)}">${b.name}</span><span style="color:var(--text)">${$f(feesFor(b.id,wn))}</span>
+          </div><div class="exsub2">${rows}</div>`;
+      }).join('') + `</div>`;
+    }
+    return `<div class="feerow exrow" onclick="toggleHist('${k}')">
+      <div style="flex:1"><span style="font-weight:700">Week ${wn}</span> <span class="sm">${w.date||''}</span></div>
+      <span class="famount" style="font-size:1rem">${$f(wkTotal)}</span>
+      <span class="excar">${open ? '▾' : '▸'}</span>
+      <button class="btn" style="background:var(--surface2);color:var(--text);font-size:0.82rem;padding:5px 9px;margin-left:8px" onclick="event.stopPropagation();editWeek(${wn})">✏️</button>
+      <button class="btn bd" style="font-size:0.82rem;padding:5px 9px;margin-left:5px" onclick="event.stopPropagation();deleteWeek(${wn})">🗑️</button>
+    </div>${sub}`;
   }).join('') : '<div class="sm">No weeks logged.</div>';
 }
 
