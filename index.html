@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v10</title>
+<title>Hee Hees v11</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -150,7 +150,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v10</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v11</span></h1>
   <div style="display:flex;align-items:center;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -400,8 +400,28 @@ let saveT = null;
 let saving = false;
 let dirty = false;   // true when local has changes not yet confirmed saved to the backend
 
-// Cool-down after closing a week before the "Start Week N+1" button returns.
-const SW_COOLDOWN_MS = 2 * 24 * 60 * 60 * 1000;   // 2 days
+// How long a week stays live/editable after it starts. Past this it auto-closes
+// (client-side, on load / foreground / frame-open) and becomes read-only on the
+// Live tab; the "Start Week N+1" button also keys off this same span.
+const LIVE_SPAN_MS = 24 * 60 * 60 * 1000;   // 24 hours
+
+function weekStart(w) {
+  return (w && (w.startedAt || Date.parse(w.date))) || 0;
+}
+function weekExpired(w) {
+  return !!w && !w.closed && weekStart(w) > 0 && Date.now() - weekStart(w) >= LIVE_SPAN_MS;
+}
+
+// Auto-close the current week once its 24h span is up. Returns true if it acted.
+function autoCloseStale() {
+  const w = S.currentWeek ? gw(S.currentWeek) : null;
+  if (!weekExpired(w)) return false;
+  w.closed = true;
+  w.closedAt = weekStart(w) + LIVE_SPAN_MS;
+  save();
+  render();
+  return true;
+}
 
 // ── Text size (A- / A+, per device) ──────────────────────────────────────────
 const FS_KEY = 'hh_fs';
@@ -684,7 +704,9 @@ async function pullRemote() {
 // Coming back to the foreground (phone wake, app switch): reconnect now and
 // pull, rather than waiting out the backoff.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && sb) { rtRetry = 0; subscribe(); }
+  if (document.visibilityState !== 'visible') return;
+  autoCloseStale();                              // lock a week whose 24h span lapsed
+  if (sb) { rtRetry = 0; subscribe(); }
 });
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -709,37 +731,28 @@ function rLive() {
     banner.style.display = 'none';
   }
 
-  // Start-week button visibility:
-  //  - editing a past week / season finished / week in progress  → hidden
-  //  - no active week (season start)                             → shown
-  //  - week closed                                               → shown only
-  //    after a short cool-down; until then a muted note with a "Start now"
-  //    escape hatch (bowling is weekly — no reason to open next week the same
-  //    night you closed this one, and it avoids an accidental tap).
+  // Start-week button / note, at the bottom of the pane:
+  //  - editing a past week / season finished / week still live  → hidden
+  //  - no active week (season start)                            → button shown
+  //  - week closed but 24h span not yet elapsed (manual early    → muted note +
+  //    close)                                                     "Start now" link
+  //  - week closed and 24h span elapsed                          → button shown
   const note = $('sw-note');
   btn.style.display  = 'none';
   note.style.display = 'none';
+  const spanDone = w ? Date.now() - weekStart(w) >= LIVE_SPAN_MS : true;
 
   if (editingWeek || (wn >= 36 && w?.closed)) {
     // both stay hidden
   } else if (w && !w.closed) {
-    // week in progress — the grid and header badge are the indicator
-  } else if (w && w.closed) {
-    const since = w.closedAt ? Date.now() - w.closedAt : SW_COOLDOWN_MS;  // legacy closed weeks: no wait
-    if (since >= SW_COOLDOWN_MS) {
-      btn.style.display = '';
-      btn.textContent   = `Start Week ${wn + 1}`;
-      btn.className      = 'btn bp bw';
-      btn.disabled       = false;
-    } else {
-      const when = new Date(w.closedAt + SW_COOLDOWN_MS)
-        .toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
-      note.innerHTML = `Week ${wn} closed. Week ${wn + 1} opens ${when}.<br>` +
-        `<a href="#" onclick="forceSW(event)" style="color:#3B82F6;font-weight:600">Start Week ${wn + 1} now</a>`;
-      note.style.display = '';
-    }
+    // week is live — the grid and header badge are the indicator
+  } else if (w && w.closed && !spanDone) {
+    const when = new Date(weekStart(w) + LIVE_SPAN_MS)
+      .toLocaleString('en-US', { weekday:'short', hour:'numeric', minute:'2-digit' });
+    note.innerHTML = `Week ${wn} closed. Week ${wn + 1} opens ${when}.<br>` +
+      `<a href="#" onclick="forceSW(event)" style="color:#3B82F6;font-weight:600">Start Week ${wn + 1} now</a>`;
+    note.style.display = '';
   } else {
-    // no active week at all — start of season
     btn.style.display = '';
     btn.textContent   = `Start Week ${(wn || 0) + 1}`;
     btn.className      = 'btn bp bw';
@@ -747,8 +760,37 @@ function rLive() {
   }
 
   const grid = $('bgrid');
+  const gsel = document.querySelector('.game-sel');
+  const locked = !!w && w.closed && !editingWeek;
+  if (gsel) gsel.style.display = locked ? 'none' : '';   // game tabs are meaningless on the locked summary
+
   if (!w) {
     grid.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted)">No active week.<br>Use the button below to start one.</div>';
+    return;
+  }
+
+  // Closed week (outside History-edit): read-only "complete" summary, not the grid.
+  if (locked) {
+    let rows = '', tot = 0;
+    S.bowlers.forEach(b => {
+      const fee = feesFor(b.id, wn); tot += fee;
+      const isAbs = w.absent?.includes(b.id);
+      rows += `<div class="feerow">
+        <span class="dot" style="background:${b.color}"></span>
+        <span style="flex:1;font-weight:600">${b.name}${isAbs ? ' <span class="sm">(absent)</span>' : ''}</span>
+        <span class="famount">${$f(fee)}</span>
+      </div>`;
+    });
+    grid.innerHTML = `<div class="card" style="margin-top:4px">
+      <div class="ch">Week ${wn} — complete <span class="sm" style="font-weight:400">${w.date || ''}</span></div>
+      <div class="cb">
+        ${rows}
+        <div style="padding:10px 0 2px;text-align:right;border-top:1px solid var(--border);font-weight:700">Total: ${$f(tot)}</div>
+        <div class="sm" style="margin-top:10px;text-align:center">
+          Locked. <a href="#" onclick="goHistory(event)" style="color:#3B82F6;font-weight:600">View / edit in History</a>
+        </div>
+      </div>
+    </div>`;
     return;
   }
 
@@ -811,7 +853,7 @@ function rNight() {
   const wn = S.currentWeek; const w = wn ? gw(wn) : null;
   const nsum = $('nsum'); const cwb = $('cwbtn');
   if (!w) { nsum.innerHTML = '<div class="sm">No active week.</div>'; cwb.style.display='none'; return; }
-  cwb.style.display = '';
+  cwb.style.display = w.closed ? 'none' : '';   // already closed — nothing to close
   let html = ''; let grand = 0;
   S.bowlers.forEach(b => {
     const fee = feesFor(b.id, wn); grand += fee;
@@ -941,6 +983,9 @@ document.querySelectorAll('.gbtn').forEach(b => b.addEventListener('click', () =
 // Escape hatch from the cool-down note — opens the normal Start Week flow.
 function forceSW(e) { if (e) e.preventDefault(); $('swbtn').click(); }
 
+// From the locked "Week N complete" card — go to History to edit deliberately.
+function goHistory(e) { if (e) e.preventDefault(); tab('history', document.querySelector('.tb[data-t="history"]')); }
+
 $('swbtn').addEventListener('click', () => {
   const next = (S.currentWeek || 0) + 1;
   if (next > 36) return;
@@ -968,14 +1013,20 @@ function confirmSW() {
     avgs[b.id] = parseFloat($(`sw-avg-${b.id}`)?.value) || b.avg;
     (on ? participating : absent).push(b.id);
   });
-  S.weeks[next] = { date: new Date().toLocaleDateString('en-US'), participating, absent, avgs, hangings:{}, games:[{},{},{}] };
+  // Close out the previous week if it's somehow still open.
+  const prev = S.currentWeek && gw(S.currentWeek);
+  if (prev && !prev.closed) { prev.closed = true; prev.closedAt = Date.now(); }
+
+  S.weeks[next] = { date: new Date().toLocaleDateString('en-US'), startedAt: Date.now(), participating, absent, avgs, hangings:{}, games:[{},{},{}] };
   S.currentWeek = next;
   closeM('m-sw'); save(); render();
 }
 
 // ── Frame modal ───────────────────────────────────────────────────────────────
 function openFrame(bid, gidx, fidx) {
+  if (!editingWeek && autoCloseStale()) return;   // 24h span lapsed while the tab sat open
   const w = gw(editingWeek || S.currentWeek); if (!w) return;
+  if (w.closed && !editingWeek) return;           // closed week is read-only outside History-edit
   fmCtx = { bid, gidx, fidx };
   const b = gb(bid);
   $('fm-title').textContent = `${b.name} — G${gidx+1} F${fidx+1}`;
@@ -1016,6 +1067,7 @@ function updHang() {
 function saveFrame() {
   const { bid, gidx, fidx } = fmCtx;
   const w = gw(editingWeek || S.currentWeek); if (!w) return;
+  if (w.closed && !editingWeek) { closeM('m-frame'); return; }   // read-only
   if (!w.hangings) w.hangings = {};
   w.hangings[bid] = fmHang;
   if (!w.games[gidx]) w.games[gidx] = {};
@@ -1321,7 +1373,7 @@ function resetSeason() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-loadState().then(()=>subscribe());
+loadState().then(() => { autoCloseStale(); subscribe(); });
 </script>
 </body>
 </html>
