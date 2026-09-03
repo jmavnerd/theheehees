@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v31</title>
+<title>Hee Hees v32</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -104,6 +104,11 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .leg { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 6px 2px 4px; font-size: 0.72rem; font-weight: 700; }
 .leg span { display: inline-flex; align-items: center; gap: 5px; }
 .leg i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+/* per-game running total per bowler */
+.gtot { display: flex; gap: 5px; margin-bottom: 6px; }
+.gtot > div { flex: 1; min-width: 0; text-align: center; border: 1px solid var(--border); border-radius: 8px; padding: 4px 2px 5px; background: var(--surface2); }
+.gtot .n { display: block; font-size: 0.74rem; font-weight: 800; text-transform: uppercase; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.gtot .v { display: block; font-size: 0.95rem; font-weight: 700; margin-top: 1px; }
 /* frame modal — bowler tab strip (always visible; pick one, toggles appear below) */
 .fbowlers { display: flex; gap: 6px; margin: 6px 0 12px; }
 .fbtab { flex: 1; min-width: 0; padding: 0.55rem 0.25rem; border-radius: 10px; border: 1.5px solid var(--border); background: var(--surface2); color: var(--text); font-weight: 700; font-size: 0.88rem; text-align: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
@@ -165,7 +170,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v31</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v32</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -193,6 +198,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
       <div class="gbtn" data-g="2">Game 3</div>
     </div>
     <div id="bleg" class="leg"></div>
+    <div id="bgtot" class="gtot"></div>
     <div id="bgrid"></div>
     <button id="swbtn" class="btn bp bw" style="margin-top:22px">Start Week 1</button>
   </div>
@@ -574,6 +580,26 @@ function feesFor(bid, wn) {
   return t;
 }
 
+// Fees a bowler has racked up in ONE game (frame infractions they committed +
+// team-infraction shares from others that game). Hangings/absent/over-10 are
+// night-level and not included.
+function gameFeeFor(bid, wn, g) {
+  const w = gw(wn); if (!w) return 0;
+  let t = 0;
+  const bg = w.games?.[g]?.[bid];
+  if (bg) for (let f = 0; f < 10; f++) for (const iid of (bg.frames?.[f] || [])) {
+    const inf = gi(iid); if (inf?.type === 'player') t += inf.fee;
+  }
+  for (const oid of (w.participating || [])) {
+    if (oid === bid) continue;
+    const og = w.games?.[g]?.[oid];
+    if (og) for (let f = 0; f < 10; f++) for (const iid of (og.frames?.[f] || [])) {
+      const inf = gi(iid); if (inf?.type === 'team') t += inf.fee;
+    }
+  }
+  return t;
+}
+
 function seasonTotals() {
   const out = {};
   S.bowlers.forEach(b => { out[b.id] = 0; });
@@ -902,7 +928,7 @@ function rLive() {
   const gsel = document.querySelector('.game-sel');
   const locked = !!w && w.closed && !editingWeek;
   if (gsel) gsel.style.display = locked ? 'none' : '';   // game tabs are meaningless on the locked summary
-  if (!w || locked) $('bleg').innerHTML = '';            // legend only belongs over the live grid
+  if (!w || locked) { $('bleg').innerHTML = ''; $('bgtot').innerHTML = ''; }   // only over the live grid
 
   if (!w) {
     grid.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted)">No active week.<br>Use the button below to start one.</div>';
@@ -938,6 +964,11 @@ function rLive() {
   // with the bowler's first name atop each column.
   const roster = orderedBowlers(wn).filter(b => w.participating.includes(b.id) && !w.absent?.includes(b.id));
   $('bleg').innerHTML = '';   // names are in every cell now
+
+  // per-bowler running fee total for the game currently being viewed
+  $('bgtot').innerHTML = roster.map(b =>
+    `<div><span class="n" style="color:${col(b)}">${b.name.split(' ')[0]}</span><span class="v">${$f(gameFeeFor(b.id, wn, curGame))}</span></div>`
+  ).join('');
 
   const chipFor = (iid, c) => {
     if (iid === 'hung') return `<span class="fchip" style="color:${c}">🪝</span>`;
