@@ -90,13 +90,14 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .gbtn.on { background: #3B82F6; border-color: #3B82F6; color: #fff; }
 
 
-/* Live grid — 5×2 frame cells; each cell split into a column per bowler */
-.fgrid { display: grid; grid-template-columns: repeat(5,1fr); gap: 4px; padding: 0.4rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
-.fcell { position: relative; display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface2); min-height: clamp(96px, 24vw, 150px); padding-top: 15px; }
-.fnum { position: absolute; top: 2px; left: 4px; z-index: 1; font-size: 0.72rem; font-weight: 700; color: var(--pink); }
-.fcol { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 2px 1px 3px; border-left: 1px solid var(--border); cursor: pointer; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+/* Live grid — 3 frame cells per row; each cell split into a column per bowler */
+.fgrid { display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; padding: 0.4rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.fcell { position: relative; display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface2); min-height: clamp(112px, 30vw, 176px); padding-top: 16px; }
+.fnum { position: absolute; top: 2px; left: 5px; z-index: 1; font-size: 0.8rem; font-weight: 700; color: var(--pink); }
+.fcol { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 3px 1px 4px; border-left: 1px solid var(--border); cursor: pointer; overflow: hidden; -webkit-tap-highlight-color: transparent; }
 .fcol:first-of-type { border-left: none; }
-.fchip { font-size: 0.62rem; padding: 0 3px; border-radius: 3px; font-weight: 800; line-height: 1.45; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fchip { font-size: 0.72rem; font-weight: 800; line-height: 1.35; letter-spacing: -.01em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fchip.team { font-style: italic; text-decoration: underline; text-underline-offset: 2px; }
 .leg { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 6px 2px 4px; font-size: 0.72rem; font-weight: 700; }
 .leg span { display: inline-flex; align-items: center; gap: 5px; }
 .leg i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
@@ -937,11 +938,9 @@ function rLive() {
   $('bleg').innerHTML = roster.map(b => `<span><i style="background:${col(b)}"></i>${b.name.split(' ')[0]}</span>`).join('');
 
   const chipFor = (iid, c) => {
-    if (iid === 'hung') return `<span class="fchip" style="background:${c}2b;border:1px solid ${c};color:${c}">🪝</span>`;
+    if (iid === 'hung') return `<span class="fchip" style="color:${c}">🪝</span>`;
     const inf = gi(iid); if (!inf) return '';
-    return inf.type === 'team'
-      ? `<span class="fchip" style="background:transparent;border:1px dashed ${c};color:${c}">${abbr(inf.name)}</span>`
-      : `<span class="fchip" style="background:${c}2b;border:1px solid ${c};color:${c}">${abbr(inf.name)}</span>`;
+    return `<span class="fchip ${inf.type === 'team' ? 'team' : ''}" style="color:${c}">${abbr(inf.name)}</span>`;
   };
 
   grid.innerHTML = '';
@@ -964,7 +963,7 @@ function abbr(name) {
     'Golden Strikeout':'GSO','Gutter Ball':'GB','High Game':'HG',
     'Open (Jeff)':'OPN','Single Pin (Jeff)':'SP','Late':'LTE','Low Game':'LG',
     'Open':'OPN','Out of Uniform':'OOU','Single Pin Miss':'SP','Spill Beer':'SB',
-    'Swept':'SWP','Talking Shit':'TS','Wrong Lane':'WL','XXXX':'XXXX',
+    'Swept':'SWP','Talking Shit':'TS','Wrong Lane':'WL','XXXX':'4X',
     'Left-Side Gutter':'LG2','Under 500':'U5','Over 10 Pin Drop':'10P','Win Cards':'WC'
   };
   return map[name] || name.substring(0,3).toUpperCase();
