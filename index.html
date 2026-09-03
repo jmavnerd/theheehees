@@ -179,6 +179,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
     </div>
     <div id="bgrid"></div>
     <button id="swbtn" class="btn bp bw" style="margin-top:22px">Start Week 1</button>
+    <div id="sw-note" class="sm" style="display:none;text-align:center;margin-top:22px;line-height:1.5"></div>
   </div>
 
   <!-- VERIFY -->
@@ -398,6 +399,9 @@ let fmInfs = new Set();
 let saveT = null;
 let saving = false;
 let dirty = false;   // true when local has changes not yet confirmed saved to the backend
+
+// Cool-down after closing a week before the "Start Week N+1" button returns.
+const SW_COOLDOWN_MS = 2 * 24 * 60 * 60 * 1000;   // 2 days
 
 // ── Text size (A- / A+, per device) ──────────────────────────────────────────
 const FS_KEY = 'hh_fs';
@@ -705,22 +709,41 @@ function rLive() {
     banner.style.display = 'none';
   }
 
-  if (editingWeek) {
-    btn.style.display = 'none';
-  } else if (wn >= 36 && w?.closed) {
-    btn.style.display = 'none';
-  } else {
-    if (w && !w.closed) {
-      // Week active — the frame grid itself is the indicator and the header
-      // badge shows the number; the full-width bar just ate vertical space.
-      btn.style.display = 'none';
-    } else {
+  // Start-week button visibility:
+  //  - editing a past week / season finished / week in progress  → hidden
+  //  - no active week (season start)                             → shown
+  //  - week closed                                               → shown only
+  //    after a short cool-down; until then a muted note with a "Start now"
+  //    escape hatch (bowling is weekly — no reason to open next week the same
+  //    night you closed this one, and it avoids an accidental tap).
+  const note = $('sw-note');
+  btn.style.display  = 'none';
+  note.style.display = 'none';
+
+  if (editingWeek || (wn >= 36 && w?.closed)) {
+    // both stay hidden
+  } else if (w && !w.closed) {
+    // week in progress — the grid and header badge are the indicator
+  } else if (w && w.closed) {
+    const since = w.closedAt ? Date.now() - w.closedAt : SW_COOLDOWN_MS;  // legacy closed weeks: no wait
+    if (since >= SW_COOLDOWN_MS) {
       btn.style.display = '';
-      const next = (wn || 0) + 1;
-      btn.textContent = `Start Week ${next}`;
-      btn.className   = 'btn bp bw';
-      btn.disabled    = false;
+      btn.textContent   = `Start Week ${wn + 1}`;
+      btn.className      = 'btn bp bw';
+      btn.disabled       = false;
+    } else {
+      const when = new Date(w.closedAt + SW_COOLDOWN_MS)
+        .toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+      note.innerHTML = `Week ${wn} closed. Week ${wn + 1} opens ${when}.<br>` +
+        `<a href="#" onclick="forceSW(event)" style="color:#3B82F6;font-weight:600">Start Week ${wn + 1} now</a>`;
+      note.style.display = '';
     }
+  } else {
+    // no active week at all — start of season
+    btn.style.display = '';
+    btn.textContent   = `Start Week ${(wn || 0) + 1}`;
+    btn.className      = 'btn bp bw';
+    btn.disabled       = false;
   }
 
   const grid = $('bgrid');
@@ -915,6 +938,9 @@ document.querySelectorAll('.gbtn').forEach(b => b.addEventListener('click', () =
 }));
 
 // ── Start Week ────────────────────────────────────────────────────────────────
+// Escape hatch from the cool-down note — opens the normal Start Week flow.
+function forceSW(e) { if (e) e.preventDefault(); $('swbtn').click(); }
+
 $('swbtn').addEventListener('click', () => {
   const next = (S.currentWeek || 0) + 1;
   if (next > 36) return;
@@ -1008,6 +1034,7 @@ $('cwbtn').addEventListener('click', () => {
   const wn = S.currentWeek; if (!wn) return;
   if (!confirm(`Close Week ${wn}?`)) return;
   S.weeks[wn].closed = true;
+  S.weeks[wn].closedAt = Date.now();
   save(); render();
 });
 
