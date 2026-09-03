@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v34</title>
+<title>Hee Hees v35</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
+  color-scheme: dark;   /* native controls (date picker, scrollbars) match the dark UI */
   --bg: #15171c; --surface: #1e2129; --surface2: #2b2f3a;
   --border: var(--pink); --text: #f2f3f6; --muted: #99a1b0; --pink: #F472B6;
   --fs: 1;   /* user text-size multiplier, set by the A-/A+ buttons — scales the whole UI */
@@ -121,7 +122,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .avginp { width: 4rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 0.3rem 0.4rem; color: var(--text); font-size: 0.9rem; text-align: center; }
 
 /* Inputs */
-textarea, input[type=text], input[type=url], input[type=number] {
+textarea, input[type=text], input[type=url], input[type=number], input[type=date] {
   background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
   padding: 0.55rem 0.7rem; color: var(--text); font-size: 0.9rem; font-family: inherit;
 }
@@ -143,6 +144,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 .exhdr { font-size: 0.68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 7px 0 2px; }
 .exline { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 0.85rem; }
 .exline.sm span { color: var(--muted); }
+.paydel { cursor: pointer; margin-left: 6px; -webkit-tap-highlight-color: transparent; }
 
 /* Verify table */
 .vtbl { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-top: 0.5rem; }
@@ -170,7 +172,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v34</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v35</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -322,6 +324,28 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
   </div>
 </div>
 
+<!-- PAYMENT MODAL -->
+<div id="m-pay" class="mbd">
+  <div class="msh">
+    <div class="mhd"></div>
+    <div class="mttl">Record Payment — <span id="pay-who"></span></div>
+    <div class="msec">Amount</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:1.1rem;font-weight:700">$</span>
+      <input type="number" id="pay-amt" inputmode="decimal" min="0" step="0.25" placeholder="0.00" style="flex:1" />
+    </div>
+    <div class="msec">Date</div>
+    <input type="date" id="pay-date" style="width:100%" />
+    <div class="msec">Note (optional)</div>
+    <input type="text" id="pay-note" placeholder="Venmo, cash, check #…" maxlength="80" />
+    <div id="pay-err" style="color:#ef4444;font-size:0.85rem;min-height:1.1rem;margin-top:8px"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn bg" style="flex:1" onclick="closeM('m-pay')">Cancel</button>
+      <button class="btn bs" style="flex:2" onclick="savePayment()">Save Payment</button>
+    </div>
+  </div>
+</div>
+
 <!-- PIN MODAL -->
 <div id="m-pin" class="mbd">
   <div class="msh" style="text-align:center">
@@ -345,7 +369,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
       <button class="pkb" onclick="pinKey('0')">0</button>
       <button class="pkb" onclick="pinKey('back')" style="background:var(--surface2)">⌫</button>
     </div>
-    <button class="btn bg bw" style="margin-top:20px" onclick="closeM('m-pin')">Cancel</button>
+    <button class="btn bg bw" style="margin-top:20px" onclick="pinOnOk=null;closeM('m-pin')">Cancel</button>
   </div>
 </div>
 
@@ -411,7 +435,10 @@ const DEFAULTS = {
     { id:'over10pin',       name:'Over 10 Pin Drop', fee:25.00, type:'player' },
     { id:'wincards',        name:'Win Cards',        fee: 1.00, type:'team'   },
   ],
-  weeks: {}
+  weeks: {},
+  // Money paid toward the season balance. Not tied to a week — a running credit.
+  // { id, bid, amount, date:'YYYY-MM-DD', note }
+  payments: []
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -474,7 +501,20 @@ function setFS(dir) {
 const ADMIN_PIN = '6969';
 let pinBuf = '';
 let pinTabEl = null;
+let pinOnOk = null;   // when set, a correct PIN runs this instead of opening the Admin tab
 let adminUnlocked = false;
+
+// Gate an action behind the Admin PIN. Runs cb immediately if already unlocked
+// this session, otherwise prompts and runs cb on success.
+function requireAdmin(cb) {
+  if (adminUnlocked) { cb(); return; }
+  pinOnOk = cb;
+  pinTabEl = null;
+  pinBuf = '';
+  updatePinDots();
+  $('pin-err').textContent = '';
+  openM('m-pin');
+}
 
 // ── Edit mode ─────────────────────────────────────────────────────────────────
 let editingWeek = null;
@@ -485,6 +525,12 @@ const $  = id => document.getElementById(id);
 const gi = id => S.infractions.find(i => i.id === id);
 const gb = id => S.bowlers.find(b => b.id === id);
 const $f = v  => `$${v.toFixed(2)}`;
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+// 'YYYY-MM-DD' → 'M/D/YYYY' (string-parsed, so no UTC day-shift)
+function fmtDate(d) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || '');
+  return m ? `${+m[2]}/${+m[3]}/${m[1]}` : (d || '');
+}
 
 // Brighten the four original bowler colors for legibility on the dark UI.
 // Non-destructive: stored b.color is untouched, only the rendered value changes.
@@ -624,6 +670,17 @@ function seasonTotals() {
   S.bowlers.forEach(b => { out[b.id] = 0; });
   Object.keys(S.weeks).forEach(wn => S.bowlers.forEach(b => { out[b.id] += feesFor(b.id, +wn); }));
   return out;
+}
+
+// ── Payments ─────────────────────────────────────────────────────────────────
+// S.payments is a flat, season-level ledger. balance = charged − paid.
+function paymentsFor(bid) {
+  return (S.payments || [])
+    .filter(p => p.bid === bid)
+    .sort((a, b) => (Date.parse(b.date) || 0) - (Date.parse(a.date) || 0));
+}
+function paidTotal(bid) {
+  return +(S.payments || []).reduce((s, p) => p.bid === bid ? s + (+p.amount || 0) : s, 0).toFixed(2);
 }
 
 // Itemized charges for one bowler in one week. Σ of .amount === feesFor(bid, wn).
@@ -1056,11 +1113,27 @@ function exLines(items) {
 function rHistory() {
   const tots = seasonTotals();
 
-  // Season Totals — tap a name for a per-week + aggregated breakdown.
+  // Season Totals — headline number is the outstanding balance (charged − paid).
+  // Tap a name for the payment ledger + per-week / aggregated charge breakdown.
   $('stots').innerHTML = orderedBowlers().map(b => {
     const k = 's:' + b.id, open = histExpanded.has(k);
+    const charged = tots[b.id], paid = paidTotal(b.id), bal = +(charged - paid).toFixed(2);
+    const balStr = bal < -0.005 ? `${$f(-bal)} cr` : $f(bal);
+    const balCls = bal < 0.005 ? 'ok' : '';   // settled or overpaid → green
     let sub = '';
     if (open) {
+      const pays = paymentsFor(b.id);
+      const payRows = pays.length
+        ? pays.map(p => `<div class="exline"><span>${fmtDate(p.date)}${p.note ? ` · ${esc(p.note)}` : ''}</span><span>−${$f(+p.amount || 0)} <span class="paydel" onclick="event.stopPropagation();askDelPayment('${p.id}')">🗑</span></span></div>`).join('')
+        : `<div class="exline sm"><span>No payments yet</span><span></span></div>`;
+      const payBlock = `<div class="exhdr" style="display:flex;justify-content:space-between;align-items:center;margin-top:2px">
+          <span>Payments</span>
+          <button class="btn" style="background:var(--surface2);color:var(--text);font-size:0.72rem;padding:3px 9px" onclick="event.stopPropagation();askAddPayment('${b.id}')">+ Add payment</button>
+        </div>${payRows}
+        <div class="exline" style="border-top:1px solid var(--border);margin-top:4px;padding-top:5px"><span>Charged</span><span>${$f(charged)}</span></div>
+        <div class="exline"><span>Paid</span><span>−${$f(paid)}</span></div>
+        <div class="exline" style="font-weight:700"><span>Balance</span><span class="${balCls}">${balStr}</span></div>`;
+
       const { perWeek, lines } = seasonBreakdown(b.id);
       let wk;
       if (perWeek.length) {
@@ -1075,12 +1148,12 @@ function rHistory() {
         wk = `<div class="exline sm"><span>No charges yet</span><span></span></div>`;
       }
       const inf = lines.length ? `<div class="exhdr">Season charges</div>${exLines(lines)}` : '';
-      sub = `<div class="exsub">${wk}${inf}</div>`;
+      sub = `<div class="exsub">${payBlock}<div class="exhdr">Week charges</div>${wk}${inf}</div>`;
     }
     return `<div class="feerow exrow" onclick="toggleHist('${k}')">
       <span class="dot" style="background:${col(b)}"></span>
-      <span style="flex:1;font-weight:600">${b.name}</span>
-      <span class="famount">${$f(tots[b.id])}</span>
+      <span style="flex:1;font-weight:600">${b.name}<br><span class="sm" style="font-weight:400">${$f(charged)} charged · ${$f(paid)} paid</span></span>
+      <span class="famount ${balCls}">${balStr}</span>
       <span class="excar">${open ? '▾' : '▸'}</span>
     </div>${sub}`;
   }).join('') || '<div class="sm">No data.</div>';
@@ -1110,6 +1183,46 @@ function rHistory() {
       <button class="btn bd" style="font-size:0.82rem;padding:5px 9px;margin-left:5px" onclick="event.stopPropagation();deleteWeek(${wn})">🗑️</button>
     </div>${sub}`;
   }).join('') : '<div class="sm">No weeks logged.</div>';
+}
+
+// ── Payments (Admin-PIN gated) ───────────────────────────────────────────────
+let payCtx = null;   // bowler id the open payment modal is for
+
+function askAddPayment(bid) { requireAdmin(() => openPaymentModal(bid)); }
+function askDelPayment(pid) { requireAdmin(() => delPayment(pid)); }
+
+function openPaymentModal(bid) {
+  const b = gb(bid); if (!b) return;
+  payCtx = bid;
+  $('pay-who').textContent = b.name;
+  $('pay-amt').value = '';
+  $('pay-date').value = new Date().toISOString().slice(0, 10);
+  $('pay-note').value = '';
+  $('pay-err').textContent = '';
+  openM('m-pay');
+}
+
+function savePayment() {
+  const bid = payCtx; if (!bid) return;
+  const amt = Math.round((parseFloat($('pay-amt').value) || 0) * 100) / 100;
+  if (!(amt > 0)) { $('pay-err').textContent = 'Enter an amount greater than $0.'; return; }
+  const date = $('pay-date').value || new Date().toISOString().slice(0, 10);
+  const note = $('pay-note').value.trim().slice(0, 80);
+  if (!Array.isArray(S.payments)) S.payments = [];
+  S.payments.push({
+    id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    bid, amount: amt, date, note
+  });
+  histExpanded.add('s:' + bid);   // keep the row open so the new payment shows
+  closeM('m-pay'); save(); rHistory();
+}
+
+function delPayment(pid) {
+  const p = (S.payments || []).find(x => x.id === pid); if (!p) return;
+  const b = gb(p.bid), who = b ? b.name.split(' ')[0] : p.bid;
+  if (!confirm(`Delete the ${$f(+p.amount || 0)} payment from ${who}${p.date ? ` on ${fmtDate(p.date)}` : ''}?`)) return;
+  S.payments = (S.payments || []).filter(x => x.id !== pid);
+  save(); rHistory();
 }
 
 function rAdmin() {
@@ -1184,6 +1297,7 @@ function doneEditing() {
 // ── Admin PIN ─────────────────────────────────────────────────────────────────
 function adminTab(el) {
   if (adminUnlocked) { tab('admin', el); return; }
+  pinOnOk = null;
   pinTabEl = el;
   pinBuf = '';
   updatePinDots();
@@ -1209,7 +1323,9 @@ function checkPin() {
   if (pinBuf === ADMIN_PIN) {
     adminUnlocked = true;
     closeM('m-pin');
-    tab('admin', pinTabEl);
+    const cb = pinOnOk; pinOnOk = null;
+    if (cb) cb();
+    else tab('admin', pinTabEl);
   } else {
     $('pin-err').textContent = 'Incorrect PIN';
     pinBuf = '';
