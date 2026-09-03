@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v24</title>
+<title>Hee Hees v25</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -92,9 +92,12 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 
 /* Live grid — 3 frame cells per row; each cell split into a column per bowler */
 .fgrid { display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; padding: 0.4rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
-.fcell { position: relative; display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface2); min-height: clamp(112px, 30vw, 176px); padding-top: 16px; }
-.fnum { position: absolute; top: 2px; left: 5px; z-index: 1; font-size: 0.8rem; font-weight: 700; color: var(--pink); }
-.fcol { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 3px 1px 4px; border-left: 1px solid var(--border); cursor: pointer; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+.fcell { position: relative; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface2); min-height: clamp(118px, 32vw, 184px); padding: 15px 3px 3px; }
+.fnum { position: absolute; top: 2px; left: 5px; z-index: 1; font-size: 0.78rem; font-weight: 700; color: var(--pink); }
+.fnames { display: flex; }
+.fnames > div { flex: 1; min-width: 0; text-align: center; font-size: 0.55rem; font-weight: 800; letter-spacing: -.02em; text-transform: uppercase; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.fcols { display: flex; flex: 1; margin-top: 2px; border-top: 1px solid var(--border); }
+.fcol { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 1px 2px; border-left: 1px solid var(--border); cursor: pointer; overflow: hidden; -webkit-tap-highlight-color: transparent; }
 .fcol:first-of-type { border-left: none; }
 .fchip { font-size: 0.72rem; font-weight: 800; line-height: 1.35; letter-spacing: -.01em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fchip.team { font-style: italic; text-decoration: underline; text-underline-offset: 2px; }
@@ -164,7 +167,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v24</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v25</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -933,9 +936,10 @@ function rLive() {
     return;
   }
 
-  // 5×2 frame cells; each cell split into a column per bowler (lineup order).
+  // 3-across frame cells; each cell split into a column per bowler (lineup order),
+  // with the bowler's first name atop each column.
   const roster = orderedBowlers(wn).filter(b => w.participating.includes(b.id) && !w.absent?.includes(b.id));
-  $('bleg').innerHTML = roster.map(b => `<span><i style="background:${col(b)}"></i>${b.name.split(' ')[0]}</span>`).join('');
+  $('bleg').innerHTML = '';   // names are in every cell now
 
   const chipFor = (iid, c) => {
     if (iid === 'hung') return `<span class="fchip" style="color:${c}">🪝</span>`;
@@ -947,11 +951,13 @@ function rLive() {
   const fg = document.createElement('div'); fg.className = 'fgrid';
   for (let f = 0; f < 10; f++) {
     const cell = document.createElement('div'); cell.className = 'fcell';
-    cell.innerHTML = `<span class="fnum">${f + 1}</span>` + roster.map(b => {
+    const names = roster.map(b => `<div style="color:${col(b)}">${b.name.split(' ')[0]}</div>`).join('');
+    const cols = roster.map(b => {
       const c = col(b);
       const chips = (w.games?.[curGame]?.[b.id]?.frames?.[f] || []).map(iid => chipFor(iid, c)).join('');
       return `<div class="fcol" style="background:${c}1f" onclick="openFrame(${curGame},${f},'${b.id}')">${chips}</div>`;
     }).join('');
+    cell.innerHTML = `<span class="fnum">${f + 1}</span><div class="fnames">${names}</div><div class="fcols">${cols}</div>`;
     fg.appendChild(cell);
   }
   grid.appendChild(fg);
