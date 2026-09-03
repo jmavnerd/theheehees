@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v20</title>
+<title>Hee Hees v21</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -24,10 +24,13 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .fsbtn:active { background: #3B82F6; color: #fff; }
 .fsbtn:disabled { opacity: .35; }
 .fsbtn .sub { font-size: 0.62rem; }
-#sync-dot { font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: 8px; }
-.s-ok  { background: rgba(34,197,94,.2);  color: #22c55e; }
-.s-sav { background: rgba(245,158,11,.2); color: #F59E0B; }
-.s-err { background: rgba(239,68,68,.2);  color: #ef4444; }
+#sync-dot { display: inline-flex; align-items: center; gap: 5px; font-size: 0.66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 0.22rem 0.55rem; border-radius: 999px; white-space: nowrap; }
+#sync-dot::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.s-ok  { background: rgba(34,197,94,.16);  color: #22c55e; }
+.s-sav { background: rgba(245,158,11,.16); color: #F59E0B; }
+.s-err { background: rgba(239,68,68,.16);  color: #ef4444; }
+.s-sav::before { animation: sblink 1s ease-in-out infinite; }
+@keyframes sblink { 50% { opacity: .25; } }
 
 /* Tab content */
 #content { flex: 1; overflow-y: auto; }
@@ -162,12 +165,12 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v20</span></h1>
-  <div style="display:flex;align-items:center;gap:6px">
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v21</span></h1>
+  <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
     <span id="week-badge">—</span>
-    <span id="sync-dot" class="s-ok">✓</span>
+    <span id="sync-dot" class="s-ok">Online</span>
   </div>
 </div>
 
@@ -645,7 +648,7 @@ function orderIds(ids, wn) {
 function syncDot(s) {
   const el = $('sync-dot');
   el.className = s === 'ok' ? 's-ok' : s === 'sav' ? 's-sav' : 's-err';
-  el.textContent = s === 'ok' ? '✓' : s === 'sav' ? '↑' : '!';
+  el.textContent = s === 'ok' ? 'Online' : s === 'sav' ? 'Saving' : 'Offline';
 }
 
 function showSaveAlert() { const el = $('save-alert'); if (el) el.style.display = 'block'; }
