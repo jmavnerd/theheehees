@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v13</title>
+<title>Hee Hees v14</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -150,7 +150,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v13</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v14</span></h1>
   <div style="display:flex;align-items:center;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -924,6 +924,7 @@ function tab(name, el) {
   document.querySelectorAll('.tb').forEach(b=>b.classList.remove('on'));
   $(`pane-${name}`).classList.add('on');
   el.classList.add('on');
+  if (name==='live')    rLive();      // e.g. entering History-edit mode
   if (name==='night')   rNight();
   if (name==='history') rHistory();
 }
