@@ -99,9 +99,11 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .leg { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 6px 2px 2px; font-size: 0.72rem; font-weight: 700; }
 .leg span { display: inline-flex; align-items: center; gap: 5px; }
 .leg i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-/* frame modal — bowler picker */
-.fpick { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0.75rem 0.9rem; margin-bottom: 6px; border-radius: 10px; border: 1.5px solid var(--border); background: var(--surface2); color: var(--text); font-weight: 700; font-size: 0.95rem; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.fpick .sm { font-weight: 600; }
+/* frame modal — bowler tab strip (always visible; pick one, toggles appear below) */
+.fbowlers { display: flex; gap: 6px; margin: 6px 0 12px; }
+.fbtab { flex: 1; min-width: 0; padding: 0.55rem 0.25rem; border-radius: 10px; border: 1.5px solid var(--border); background: var(--surface2); color: var(--text); font-weight: 700; font-size: 0.88rem; text-align: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.fbtab .mk { display: block; font-size: 0.6rem; font-weight: 700; margin-top: 2px; min-height: 0.85em; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.btn:disabled { opacity: .4; pointer-events: none; }
 
 /* Start-week bowler row */
 .swrow { display: flex; align-items: center; padding: 0.7rem 0; border-bottom: 1px solid var(--border); gap: 0.65rem; }
@@ -302,23 +304,11 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
   <div class="msh">
     <div class="mhd"></div>
     <div class="mttl" id="fm-title"></div>
-
-    <div id="fm-pick">
-      <div class="msec">Which bowler?</div>
-      <div id="fm-bowlers"></div>
-      <button class="btn bg bw mt12" onclick="closeM('m-frame')">Cancel</button>
-    </div>
-
-    <div id="fm-assign" style="display:none">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-        <button class="btn bg" style="padding:6px 12px;font-size:0.85rem" onclick="fmBack()">‹ Bowler</button>
-        <span id="fm-assign-hdr" style="flex:1;font-weight:700;font-size:0.95rem"></span>
-      </div>
-      <div id="fm-infs"></div>
-      <div style="display:flex;gap:8px;margin-top:14px">
-        <button class="btn" style="flex:1;background:#F59E0B;color:#000" onclick="closeM('m-frame')">Cancel</button>
-        <button class="btn bp" style="flex:2" onclick="saveFrame()">Save</button>
-      </div>
+    <div id="fm-bowlers" class="fbowlers"></div>
+    <div id="fm-infs"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn" style="flex:1;background:#F59E0B;color:#000" onclick="closeM('m-frame')">Cancel</button>
+      <button class="btn bp" style="flex:2" id="fm-save" onclick="saveFrame()">Save</button>
     </div>
   </div>
 </div>
@@ -1242,36 +1232,42 @@ function hungCountW(bid, w) {
   return n;
 }
 
+function fmRoster() {
+  const w = gw(editingWeek || S.currentWeek);
+  return w ? orderedBowlers(editingWeek || S.currentWeek)
+    .filter(b => w.participating.includes(b.id) && !w.absent?.includes(b.id)) : [];
+}
+
+// The bowler tab strip — always visible in the modal; the selected one is filled.
+function renderFmBowlers() {
+  const w = gw(editingWeek || S.currentWeek); if (!w) return;
+  $('fm-bowlers').innerHTML = fmRoster().map(b => {
+    const c = col(b);
+    const cur = w.games?.[fmCtx.gidx]?.[b.id]?.frames?.[fmCtx.fidx] || [];
+    const tags = cur.map(iid => iid === 'hung' ? '🪝' : (gi(iid) ? abbr(gi(iid).name) : '')).filter(Boolean).join(' ');
+    const on = fmCtx.bid === b.id;
+    return `<button class="fbtab" style="border-color:${c}${on ? `;background:${c}2b;color:${c};box-shadow:inset 0 0 0 1.5px ${c}` : ''}"
+      onclick="fmPick('${b.id}')">${b.name.split(' ')[0]}<span class="mk" style="color:${c}">${tags}</span></button>`;
+  }).join('');
+}
+
 function openFrame(gidx, fidx) {
   if (!editingWeek && autoCloseStale()) return;
   const w = gw(editingWeek || S.currentWeek); if (!w) return;
   if (w.closed && !editingWeek) return;
   fmCtx = { gidx, fidx, bid: null };
   $('fm-title').textContent = `Game ${gidx + 1} · Frame ${fidx + 1}`;
-
-  const roster = orderedBowlers(editingWeek || S.currentWeek)
-    .filter(b => w.participating.includes(b.id) && !w.absent?.includes(b.id));
-  $('fm-bowlers').innerHTML = roster.map(b => {
-    const cur = w.games?.[gidx]?.[b.id]?.frames?.[fidx] || [];
-    const tags = cur.map(iid => iid === 'hung' ? '🪝' : (gi(iid) ? abbr(gi(iid).name) : '')).filter(Boolean).join(' ');
-    const c = col(b);
-    return `<button class="fpick" style="border-color:${c}" onclick="fmPick('${b.id}')">
-      <span style="color:${c}">${b.name}</span><span class="sm">${tags || '—'}</span></button>`;
-  }).join('');
-
-  $('fm-pick').style.display = '';
-  $('fm-assign').style.display = 'none';
+  renderFmBowlers();
+  $('fm-infs').innerHTML = `<div class="sm" style="text-align:center;padding:22px 0">Pick a bowler above.</div>`;
+  $('fm-save').disabled = true;
   openM('m-frame');
 }
-
-function fmBack() { openFrame(fmCtx.gidx, fmCtx.fidx); }   // re-render the picker
 
 function fmPick(bid) {
   const w = gw(editingWeek || S.currentWeek); if (!w) return;
   fmCtx.bid = bid;
-  const b = gb(bid);
+  renderFmBowlers();
   fmInfs = new Set(w.games?.[fmCtx.gidx]?.[bid]?.frames?.[fmCtx.fidx] || []);
-  $('fm-assign-hdr').textContent = `${b.name} — G${fmCtx.gidx + 1} F${fmCtx.fidx + 1}`;
 
   const hungRow = `<div class="ir">
     <div style="flex:1"><div class="irn">🪝 Hung</div><div class="irf">counts toward the hanging scale</div></div>
@@ -1284,9 +1280,7 @@ function fmPick(bid) {
     </div>`
   ).join('');
   $('fm-infs').innerHTML = hungRow + infRows;
-
-  $('fm-pick').style.display = 'none';
-  $('fm-assign').style.display = '';
+  $('fm-save').disabled = false;
 }
 
 function togInf(id, on) { on ? fmInfs.add(id) : fmInfs.delete(id); }
