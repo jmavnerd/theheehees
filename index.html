@@ -11,7 +11,8 @@
   --border: #333; --text: #f0f0f0; --muted: #888;
   --tab-h: clamp(56px, 8vw, 68px);
   --hdr-h: clamp(48px, 7vw, 62px);
-  font-size: clamp(14px, 2.2vw, 18px);
+  --fs: 1;   /* user text-size multiplier, set by the A-/A+ buttons */
+  font-size: calc(clamp(14px, 2.2vw, 18px) * var(--fs));
 }
 body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 1rem; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
 
@@ -19,6 +20,10 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 #hdr { height: var(--hdr-h); background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 1rem; flex-shrink: 0; }
 #hdr h1 { font-size: 1.1rem; font-weight: 700; }
 #week-badge { font-size: 0.75rem; color: var(--muted); background: var(--surface2); padding: 0.2rem 0.6rem; border-radius: 10px; }
+.fsbtn { width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 13px; font-weight: 700; line-height: 1; cursor: pointer; -webkit-tap-highlight-color: transparent; display: flex; align-items: center; justify-content: center; }
+.fsbtn:active { background: #3B82F6; color: #fff; }
+.fsbtn:disabled { opacity: .35; }
+.fsbtn .sub { font-size: 9px; }
 #sync-dot { font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: 8px; }
 .s-ok  { background: rgba(34,197,94,.2);  color: #22c55e; }
 .s-sav { background: rgba(245,158,11,.2); color: #F59E0B; }
@@ -86,17 +91,17 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 
 .bsec { margin-bottom: 0.45rem; }
 .bhdr { display: flex; align-items: center; padding: 0.35rem 0.6rem; border-radius: 8px 8px 0 0; border: 1px solid var(--border); border-bottom: none; gap: 0.5rem; }
-.bname { font-weight: 700; font-size: 0.9rem; flex: 1; }
+.bname { font-weight: 700; font-size: 1rem; flex: 1; }
 .hbadge { display: flex; align-items: center; gap: 4px; padding: 0.15rem 0.5rem; border-radius: 10px; background: var(--surface2); cursor: pointer; font-size: 0.75rem; }
 .hbadge.lit { background: rgba(239,68,68,.2); color: #ef4444; }
 
 .fgrid { display: grid; grid-template-columns: repeat(5,1fr); gap: 3px; padding: 0.3rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0 0 8px 8px; }
-.fcell { border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; position: relative; background: var(--surface2); border: 1px solid var(--border); min-height: 46px; -webkit-tap-highlight-color: transparent; overflow: hidden; padding: 2px 2px 3px; }
+.fcell { border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; position: relative; background: var(--surface2); border: 1px solid var(--border); min-height: 3.3rem; -webkit-tap-highlight-color: transparent; overflow: hidden; padding: 3px 2px 4px; }
 .fcell.abs { opacity: .3; cursor: default; }
 .fcell.fi  { background: rgba(249,115,22,.2); border-color: #F97316; }
-.fnum { font-size: clamp(7px,1.2vw,10px); color: var(--muted); position: absolute; top: 2px; left: 3px; }
-.fchips { display: flex; flex-wrap: wrap; gap: 1px; justify-content: center; margin-top: 7px; }
-.fchip { font-size: clamp(9px,1.8vw,13px); padding: 1px 4px; border-radius: 3px; font-weight: 700; line-height: 1.3; }
+.fnum { font-size: 0.78rem; font-weight: 600; color: var(--muted); position: absolute; top: 3px; left: 4px; }
+.fchips { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; margin-top: 0.7rem; }
+.fchip { font-size: 0.92rem; padding: 1px 5px; border-radius: 3px; font-weight: 700; line-height: 1.3; }
 .fcp { background: rgba(245,158,11,.3); color: #F59E0B; }
 .fct { background: rgba(59,130,246,.3); color: #60A5FA; }
 
@@ -146,7 +151,9 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 
 <div id="hdr">
   <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v9</span></h1>
-  <div style="display:flex;align-items:center;gap:8px">
+  <div style="display:flex;align-items:center;gap:6px">
+    <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
+    <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
     <span id="week-badge">—</span>
     <span id="sync-dot" class="s-ok">✓</span>
   </div>
@@ -391,6 +398,30 @@ let fmInfs = new Set();
 let saveT = null;
 let saving = false;
 let dirty = false;   // true when local has changes not yet confirmed saved to the backend
+
+// ── Text size (A- / A+, per device) ──────────────────────────────────────────
+const FS_KEY = 'hh_fs';
+const FS_MIN = 0.8, FS_MAX = 1.5, FS_STEP = 0.1;
+
+function applyFS(v) {
+  v = Math.round(Math.min(FS_MAX, Math.max(FS_MIN, v)) * 100) / 100;
+  document.documentElement.style.setProperty('--fs', v);
+  try { localStorage.setItem(FS_KEY, v); } catch (e) {}
+  const b = document.querySelectorAll('.fsbtn');
+  if (b[0]) b[0].disabled = v <= FS_MIN + 1e-9;
+  if (b[1]) b[1].disabled = v >= FS_MAX - 1e-9;
+}
+
+function setFS(dir) {
+  const cur = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fs')) || 1;
+  applyFS(cur + dir * FS_STEP);
+}
+
+(function initFS() {
+  let v = 1;
+  try { v = parseFloat(localStorage.getItem(FS_KEY)) || 1; } catch (e) {}
+  applyFS(v);
+})();
 
 // ── Admin PIN ─────────────────────────────────────────────────────────────────
 const ADMIN_PIN = '6969';
