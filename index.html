@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v19</title>
+<title>Hee Hees v20</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
   --bg: #15171c; --surface: #1e2129; --surface2: #2b2f3a;
-  --border: #8a4c6d; --text: #f2f3f6; --muted: #99a1b0; --pink: #F472B6;
+  --border: var(--pink); --text: #f2f3f6; --muted: #99a1b0; --pink: #F472B6;
   --fs: 1;   /* user text-size multiplier, set by the A-/A+ buttons — scales the whole UI */
   --tab-h: calc(clamp(56px, 8vw, 68px) * var(--fs));
   --hdr-h: calc(clamp(48px, 7vw, 62px) * var(--fs));
@@ -162,7 +162,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v19</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v20</span></h1>
   <div style="display:flex;align-items:center;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
