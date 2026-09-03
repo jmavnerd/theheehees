@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v11</title>
+<title>Hee Hees v12</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -150,7 +150,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v11</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v12</span></h1>
   <div style="display:flex;align-items:center;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -179,7 +179,6 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
     </div>
     <div id="bgrid"></div>
     <button id="swbtn" class="btn bp bw" style="margin-top:22px">Start Week 1</button>
-    <div id="sw-note" class="sm" style="display:none;text-align:center;margin-top:22px;line-height:1.5"></div>
   </div>
 
   <!-- VERIFY -->
@@ -731,27 +730,16 @@ function rLive() {
     banner.style.display = 'none';
   }
 
-  // Start-week button / note, at the bottom of the pane:
-  //  - editing a past week / season finished / week still live  → hidden
-  //  - no active week (season start)                            → button shown
-  //  - week closed but 24h span not yet elapsed (manual early    → muted note +
-  //    close)                                                     "Start now" link
-  //  - week closed and 24h span elapsed                          → button shown
-  const note = $('sw-note');
-  btn.style.display  = 'none';
-  note.style.display = 'none';
-  const spanDone = w ? Date.now() - weekStart(w) >= LIVE_SPAN_MS : true;
+  // Start-week button, at the bottom of the pane:
+  //  - editing a past week / season finished / week still live → hidden
+  //  - week closed (24h timeout OR manual Close Week — both      → button shown
+  //    finalize the same way) or no active week
+  btn.style.display = 'none';
 
   if (editingWeek || (wn >= 36 && w?.closed)) {
-    // both stay hidden
+    // stays hidden
   } else if (w && !w.closed) {
     // week is live — the grid and header badge are the indicator
-  } else if (w && w.closed && !spanDone) {
-    const when = new Date(weekStart(w) + LIVE_SPAN_MS)
-      .toLocaleString('en-US', { weekday:'short', hour:'numeric', minute:'2-digit' });
-    note.innerHTML = `Week ${wn} closed. Week ${wn + 1} opens ${when}.<br>` +
-      `<a href="#" onclick="forceSW(event)" style="color:#3B82F6;font-weight:600">Start Week ${wn + 1} now</a>`;
-    note.style.display = '';
   } else {
     btn.style.display = '';
     btn.textContent   = `Start Week ${(wn || 0) + 1}`;
@@ -980,9 +968,6 @@ document.querySelectorAll('.gbtn').forEach(b => b.addEventListener('click', () =
 }));
 
 // ── Start Week ────────────────────────────────────────────────────────────────
-// Escape hatch from the cool-down note — opens the normal Start Week flow.
-function forceSW(e) { if (e) e.preventDefault(); $('swbtn').click(); }
-
 // From the locked "Week N complete" card — go to History to edit deliberately.
 function goHistory(e) { if (e) e.preventDefault(); tab('history', document.querySelector('.tb[data-t="history"]')); }
 
