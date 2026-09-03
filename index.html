@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v14</title>
+<title>Hee Hees v15</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -124,6 +124,16 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 .feerow:last-child { border-bottom: none; }
 .famount { font-size: 1.1rem; font-weight: 700; margin-left: auto; }
 
+/* History breakdown accordions */
+.exrow { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.excar { color: var(--muted); font-size: 0.8rem; margin-left: 2px; }
+.exsub { background: var(--surface2); border-radius: 8px; padding: 6px 10px; margin: 2px 0 8px; }
+.exhdr { font-size: 0.68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 7px 0 2px; }
+.exline { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 0.85rem; }
+.exline.sm span { color: var(--muted); }
+.fchipbtn { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px; font-size: 0.78rem; font-weight: 700; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.fchipbtn.on { border-color: #3B82F6; }
+
 /* Verify table */
 .vtbl { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-top: 0.5rem; }
 .vtbl th { text-align: left; padding: 0.3rem 0.45rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; }
@@ -150,7 +160,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v14</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v15</span></h1>
   <div style="display:flex;align-items:center;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -454,6 +464,7 @@ let adminUnlocked = false;
 
 // ── Edit mode ─────────────────────────────────────────────────────────────────
 let editingWeek = null;
+let histExpanded = new Set();   // History tab: expanded breakdown keys ('s:<bid>' / 'w:<wn>:<bid>')
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 const $  = id => document.getElementById(id);
@@ -521,6 +532,75 @@ function seasonTotals() {
   S.bowlers.forEach(b => { out[b.id] = 0; });
   Object.keys(S.weeks).forEach(wn => S.bowlers.forEach(b => { out[b.id] += feesFor(b.id, +wn); }));
   return out;
+}
+
+// Itemized charges for one bowler in one week. Σ of .amount === feesFor(bid, wn).
+function feeBreakdown(bid, wn) {
+  const w = gw(wn); if (!w) return [];
+  const items = [];
+
+  if (w.absent?.includes(bid)) items.push({ label: 'Absent', amount: gi('absent')?.fee ?? 10 });
+
+  const own = {};
+  for (let g = 0; g < 3; g++) {
+    const bg = w.games?.[g]?.[bid]; if (!bg) continue;
+    for (let f = 0; f < 10; f++) for (const iid of (bg.frames?.[f] || [])) {
+      const inf = gi(iid);
+      if (inf && inf.type === 'player') own[iid] = (own[iid] || 0) + 1;
+    }
+  }
+  Object.keys(own).forEach(iid => {
+    const inf = gi(iid), q = own[iid];
+    items.push({ label: q > 1 ? `${inf.name} ×${q}` : inf.name, amount: +(q * inf.fee).toFixed(2) });
+  });
+
+  for (const oid of (w.participating || [])) {
+    if (oid === bid) continue;
+    const from = {};
+    for (let g = 0; g < 3; g++) {
+      const og = w.games?.[g]?.[oid]; if (!og) continue;
+      for (let f = 0; f < 10; f++) for (const iid of (og.frames?.[f] || [])) {
+        const inf = gi(iid);
+        if (inf && inf.type === 'team') from[iid] = (from[iid] || 0) + 1;
+      }
+    }
+    Object.keys(from).forEach(iid => {
+      const inf = gi(iid), q = from[iid], src = gb(oid);
+      const who = src ? src.name.split(' ')[0] : oid;
+      items.push({ label: `${inf.name} from ${who}${q > 1 ? ` ×${q}` : ''}`, amount: +(q * inf.fee).toFixed(2) });
+    });
+  }
+
+  const hc = w.hangings?.[bid] || 0;
+  if (hc > 0) items.push({ label: `Hangings (${hc})`, amount: +hangVal(hc).toFixed(2) });
+
+  if (wn === 36 && overTenDrop(bid)) items.push({ label: 'Over 10-pin drop', amount: gi('over10pin')?.fee ?? 25 });
+
+  return items;
+}
+
+// Season roll-up for one bowler: per-week subtotals + aggregated charge lines.
+function seasonBreakdown(bid) {
+  const perWeek = [], own = {}, team = {};
+  let hangCount = 0, hangFee = 0, absences = 0, over10 = 0;
+  Object.keys(S.weeks).map(Number).sort((a, b) => a - b).forEach(wn => {
+    const w = gw(wn);
+    const amt = feesFor(bid, wn);
+    if (amt) perWeek.push({ wn, amount: +amt.toFixed(2) });
+    if (w.absent?.includes(bid)) absences++;
+    for (let g = 0; g < 3; g++) { const bg = w.games?.[g]?.[bid]; if (bg) for (let f = 0; f < 10; f++) for (const iid of (bg.frames?.[f] || [])) { const inf = gi(iid); if (inf?.type === 'player') own[iid] = (own[iid] || 0) + 1; } }
+    for (const oid of (w.participating || [])) { if (oid === bid) continue; for (let g = 0; g < 3; g++) { const og = w.games?.[g]?.[oid]; if (og) for (let f = 0; f < 10; f++) for (const iid of (og.frames?.[f] || [])) { const inf = gi(iid); if (inf?.type === 'team') team[iid] = (team[iid] || 0) + 1; } } }
+    const hc = w.hangings?.[bid] || 0;
+    if (hc) { hangCount += hc; hangFee += hangVal(hc); }   // hang fee is per-week, not cumulative across the season
+    if (wn === 36 && overTenDrop(bid)) over10++;
+  });
+  const lines = [];
+  if (absences) lines.push({ label: `Absent ×${absences}`, amount: +((gi('absent')?.fee ?? 10) * absences).toFixed(2) });
+  Object.keys(own).forEach(iid => { const inf = gi(iid); lines.push({ label: `${inf.name} ×${own[iid]}`, amount: +(own[iid] * inf.fee).toFixed(2) }); });
+  Object.keys(team).forEach(iid => { const inf = gi(iid); lines.push({ label: `${inf.name} (team) ×${team[iid]}`, amount: +(team[iid] * inf.fee).toFixed(2) }); });
+  if (hangCount) lines.push({ label: `Hangings ×${hangCount}`, amount: +hangFee.toFixed(2) });
+  if (over10) lines.push({ label: `Over 10-pin drop ×${over10}`, amount: (gi('over10pin')?.fee ?? 25) * over10 });
+  return { perWeek, lines };
 }
 
 // Lineup order: lowest average first, highest average last (the anchor).
@@ -885,24 +965,61 @@ function rNight() {
   nsum.innerHTML = html;
 }
 
+function toggleHist(k) {
+  histExpanded.has(k) ? histExpanded.delete(k) : histExpanded.add(k);
+  rHistory();
+}
+
+function exLines(items) {
+  return items.map(it => `<div class="exline"><span>${it.label}</span><span>${$f(it.amount)}</span></div>`).join('');
+}
+
 function rHistory() {
   const tots = seasonTotals();
-  $('stots').innerHTML = orderedBowlers().map(b =>
-    `<div class="feerow"><span class="dot" style="background:${b.color}"></span><span style="flex:1;font-weight:600">${b.name}</span><span class="famount">${$f(tots[b.id])}</span></div>`
-  ).join('') || '<div class="sm">No data.</div>';
 
+  // Season Totals — tap a name for a per-week + aggregated breakdown.
+  $('stots').innerHTML = orderedBowlers().map(b => {
+    const k = 's:' + b.id, open = histExpanded.has(k);
+    let sub = '';
+    if (open) {
+      const { perWeek, lines } = seasonBreakdown(b.id);
+      const wk = perWeek.length
+        ? perWeek.map(p => `<div class="exline"><span>Week ${p.wn}</span><span>${$f(p.amount)}</span></div>`).join('')
+        : `<div class="exline sm"><span>No charges yet</span><span></span></div>`;
+      const inf = lines.length ? `<div class="exhdr">Season charges</div>${exLines(lines)}` : '';
+      sub = `<div class="exsub">${wk}${inf}</div>`;
+    }
+    return `<div class="feerow exrow" onclick="toggleHist('${k}')">
+      <span class="dot" style="background:${b.color}"></span>
+      <span style="flex:1;font-weight:600">${b.name}</span>
+      <span class="famount">${$f(tots[b.id])}</span>
+      <span class="excar">${open ? '▾' : '▸'}</span>
+    </div>${sub}`;
+  }).join('') || '<div class="sm">No data.</div>';
+
+  // Week Log — tap a bowler's chip for that week's itemized charges.
   const wns = Object.keys(S.weeks).map(Number).sort((a,b)=>b-a);
   $('wlog').innerHTML = wns.length ? wns.map(wn => {
     const w = S.weeks[wn];
-    const fees = orderedBowlers(wn).map(b=>`<span style="color:${b.color}">${b.initials}:${$f(feesFor(b.id,wn))}</span>`).join(' ');
+    const order = orderedBowlers(wn);
+    const chips = order.map(b => {
+      const k = `w:${wn}:${b.id}`;
+      return `<button class="fchipbtn ${histExpanded.has(k)?'on':''}" style="color:${b.color}" onclick="toggleHist('${k}')">${b.initials}:${$f(feesFor(b.id,wn))}</button>`;
+    }).join(' ');
+    const panels = order.filter(b => histExpanded.has(`w:${wn}:${b.id}`)).map(b => {
+      const items = feeBreakdown(b.id, wn);
+      const rows = items.length ? exLines(items) : `<div class="exline sm"><span>No charges</span><span></span></div>`;
+      return `<div class="exsub"><div class="exhdr">${b.name} — Week ${wn}</div>${rows}
+        <div class="exline" style="border-top:1px solid var(--border);font-weight:700;margin-top:4px;padding-top:5px"><span>Total</span><span>${$f(feesFor(b.id,wn))}</span></div></div>`;
+    }).join('');
     return `<div class="feerow">
       <div style="flex:1">
         <div style="font-weight:600">Week ${wn} <span class="sm">${w.date||''}</span></div>
-        <div class="sm" style="margin-top:2px">${fees}</div>
+        <div class="sm" style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">${chips}</div>
       </div>
       <button class="btn" style="background:var(--surface2);color:var(--text);font-size:0.8rem;padding:6px 12px;margin-right:6px" onclick="editWeek(${wn})">✏️ Edit</button>
       <button class="btn bd" style="font-size:0.8rem;padding:6px 12px" onclick="deleteWeek(${wn})">🗑️</button>
-    </div>`;
+    </div>${panels}`;
   }).join('') : '<div class="sm">No weeks logged.</div>';
 }
 
