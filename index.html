@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v28</title>
+<title>Hee Hees v29</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -138,8 +138,6 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 .exhdr { font-size: 0.68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 7px 0 2px; }
 .exline { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 0.85rem; }
 .exline.sm span { color: var(--muted); }
-.fchipbtn { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px; font-size: 0.78rem; font-weight: 700; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.fchipbtn.on { border-color: #3B82F6; }
 
 /* Verify table */
 .vtbl { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-top: 0.5rem; }
@@ -167,7 +165,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v28</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v29</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -1016,15 +1014,13 @@ function rHistory() {
       const { perWeek, lines } = seasonBreakdown(b.id);
       let wk;
       if (perWeek.length) {
-        const chips = perWeek.map(p => {
-          const kk = `sw:${b.id}:${p.wn}`;
-          return `<button class="fchipbtn ${histExpanded.has(kk)?'on':''}" onclick="event.stopPropagation();toggleHist('${kk}')">Wk ${p.wn} · ${$f(p.amount)}</button>`;
-        }).join(' ');
-        const panels = perWeek.filter(p => histExpanded.has(`sw:${b.id}:${p.wn}`)).map(p =>
-          `<div class="exsub2"><div class="exhdr">Week ${p.wn}</div>${exLines(feeBreakdown(b.id, p.wn))}
-            <div class="exline" style="border-top:1px solid var(--border);font-weight:700;margin-top:3px;padding-top:4px"><span>Total</span><span>${$f(p.amount)}</span></div></div>`
-        ).join('');
-        wk = `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:2px">${chips}</div>${panels}`;
+        wk = perWeek.map(p => {
+          const kk = `sw:${b.id}:${p.wn}`, wopen = histExpanded.has(kk);
+          const detail = wopen ? `<div class="exsub2">${exLines(feeBreakdown(b.id, p.wn))}</div>` : '';
+          return `<div class="exline exrow" style="font-weight:600" onclick="event.stopPropagation();toggleHist('${kk}')">
+              <span>Week ${p.wn} <span class="excar">${wopen ? '▾' : '▸'}</span></span><span>${$f(p.amount)}</span>
+            </div>${detail}`;
+        }).join('');
       } else {
         wk = `<div class="exline sm"><span>No charges yet</span><span></span></div>`;
       }
