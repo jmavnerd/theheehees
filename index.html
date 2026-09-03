@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v29</title>
+<title>Hee Hees v30</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -60,7 +60,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .tgl { position: relative; width: clamp(40px,6vw,50px); height: clamp(24px,3.5vw,30px); flex-shrink: 0; }
 .tgl input { opacity: 0; width: 0; height: 0; position: absolute; }
 .tgl-tr { position: absolute; inset: 0; background: var(--border); border-radius: 15px; cursor: pointer; transition: background .2s; }
-.tgl input:checked + .tgl-tr { background: #3B82F6; }
+.tgl input:checked + .tgl-tr { background: #22c55e; }
 .tgl-th { position: absolute; width: clamp(18px,2.6vw,22px); height: clamp(18px,2.6vw,22px); background: #fff; border-radius: 50%; top: 3px; left: 3px; pointer-events: none; transition: transform .2s; }
 .tgl input:checked ~ .tgl-th { transform: translateX(clamp(16px,2.2vw,20px)); }
 
@@ -165,7 +165,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v29</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v30</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
