@@ -90,15 +90,14 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .gbtn.on { background: #3B82F6; border-color: #3B82F6; color: #fff; }
 
 
-.fgrid { display: grid; grid-template-columns: repeat(5,1fr); gap: 5px; padding: 0.4rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
-.fcell { border-radius: 9px; display: flex; flex-direction: column; align-items: stretch; cursor: pointer; position: relative; background: var(--surface2); border: 1px solid var(--border); min-height: clamp(104px, 25vw, 168px); -webkit-tap-highlight-color: transparent; overflow: hidden; padding: 22px 4px 6px; }
-.fnum { font-size: 0.95rem; font-weight: 700; color: var(--pink); position: absolute; top: 4px; left: 7px; }
-.fchips { display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start; justify-content: center; }
-.fchip { font-size: 0.88rem; padding: 2px 6px; border-radius: 5px; font-weight: 700; line-height: 1.35; }
-/* bowler colour legend under the game selector */
-.leg { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 6px 2px 2px; font-size: 0.72rem; font-weight: 700; }
-.leg span { display: inline-flex; align-items: center; gap: 5px; }
-.leg i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+/* Live grid — one row per frame, quartered into a column per bowler */
+.fgrid { display: flex; flex-direction: column; gap: 6px; padding: 0.4rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.fhead { display: flex; padding: 1px 0 4px; font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
+.fhead > div { flex: 1; min-width: 0; text-align: center; }
+.frow { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; min-height: 52px; background: var(--surface2); }
+.fg-num { flex: 0 0 24px; display: flex; align-items: flex-start; justify-content: center; padding-top: 5px; font-size: 0.8rem; font-weight: 700; color: var(--pink); background: rgba(255,255,255,.035); }
+.fq { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 3px; align-content: flex-start; justify-content: center; padding: 5px 2px; cursor: pointer; border-left: 1px solid var(--border); -webkit-tap-highlight-color: transparent; }
+.fchip { font-size: 0.82rem; padding: 1px 5px; border-radius: 4px; font-weight: 700; line-height: 1.3; }
 /* frame modal — bowler tab strip (always visible; pick one, toggles appear below) */
 .fbowlers { display: flex; gap: 6px; margin: 6px 0 12px; }
 .fbtab { flex: 1; min-width: 0; padding: 0.55rem 0.25rem; border-radius: 10px; border: 1.5px solid var(--border); background: var(--surface2); color: var(--text); font-weight: 700; font-size: 0.88rem; text-align: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
@@ -931,31 +930,34 @@ function rLive() {
     return;
   }
 
-  // One combined grid. Every playing bowler's chips for the frame, colour-coded.
+  // One row per frame, quartered into a column per bowler (lineup order).
   const roster = orderedBowlers(wn).filter(b => w.participating.includes(b.id) && !w.absent?.includes(b.id));
-  $('bleg').innerHTML = roster.map(b => `<span><i style="background:${col(b)}"></i>${b.name.split(' ')[0]}</span>`).join('');
+  $('bleg').innerHTML = '';
+
+  const chipFor = (iid, c) => {
+    if (iid === 'hung') return `<span class="fchip" style="background:${c}2b;border:1px solid ${c};color:${c}">🪝</span>`;
+    const inf = gi(iid); if (!inf) return '';
+    return inf.type === 'team'
+      ? `<span class="fchip" style="background:transparent;border:1px dashed ${c};color:${c}">${abbr(inf.name)}</span>`
+      : `<span class="fchip" style="background:${c}2b;border:1px solid ${c};color:${c}">${abbr(inf.name)}</span>`;
+  };
 
   grid.innerHTML = '';
   const fg = document.createElement('div'); fg.className = 'fgrid';
+
+  const head = document.createElement('div'); head.className = 'fhead';
+  head.innerHTML = `<div style="flex:0 0 24px"></div>` +
+    roster.map(b => `<div style="color:${col(b)}">${b.name.split(' ')[0]}</div>`).join('');
+  fg.appendChild(head);
+
   for (let f = 0; f < 10; f++) {
-    const cell = document.createElement('div'); cell.className = 'fcell';
-    let chips = '';
-    roster.forEach(b => {
+    const row = document.createElement('div'); row.className = 'frow';
+    row.innerHTML = `<div class="fg-num">${f + 1}</div>` + roster.map(b => {
       const c = col(b);
-      (w.games?.[curGame]?.[b.id]?.frames?.[f] || []).forEach(iid => {
-        if (iid === 'hung') {
-          chips += `<span class="fchip" style="background:${c}2b;border:1px solid ${c};color:${c}">🪝</span>`;
-          return;
-        }
-        const inf = gi(iid); if (!inf) return;
-        chips += inf.type === 'team'
-          ? `<span class="fchip" style="background:transparent;border:1px dashed ${c};color:${c}">${abbr(inf.name)}</span>`
-          : `<span class="fchip" style="background:${c}2b;border:1px solid ${c};color:${c}">${abbr(inf.name)}</span>`;
-      });
-    });
-    cell.innerHTML = `<span class="fnum">${f + 1}</span>${chips ? `<div class="fchips">${chips}</div>` : ''}`;
-    cell.onclick = () => openFrame(curGame, f);
-    fg.appendChild(cell);
+      const chips = (w.games?.[curGame]?.[b.id]?.frames?.[f] || []).map(iid => chipFor(iid, c)).join('');
+      return `<div class="fq" style="background:${c}1f" onclick="openFrame(${curGame},${f},'${b.id}')">${chips}</div>`;
+    }).join('');
+    fg.appendChild(row);
   }
   grid.appendChild(fg);
 }
@@ -1251,15 +1253,19 @@ function renderFmBowlers() {
   }).join('');
 }
 
-function openFrame(gidx, fidx) {
+function openFrame(gidx, fidx, bid) {
   if (!editingWeek && autoCloseStale()) return;
   const w = gw(editingWeek || S.currentWeek); if (!w) return;
   if (w.closed && !editingWeek) return;
   fmCtx = { gidx, fidx, bid: null };
   $('fm-title').textContent = `Game ${gidx + 1} · Frame ${fidx + 1}`;
   renderFmBowlers();
-  $('fm-infs').innerHTML = `<div class="sm" style="text-align:center;padding:22px 0">Pick a bowler above.</div>`;
-  $('fm-save').disabled = true;
+  if (bid) {
+    fmPick(bid);   // tapped a specific bowler's column — jump straight to their toggles
+  } else {
+    $('fm-infs').innerHTML = `<div class="sm" style="text-align:center;padding:22px 0">Pick a bowler above.</div>`;
+    $('fm-save').disabled = true;
+  }
   openM('m-frame');
 }
 
