@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v26</title>
+<title>Hee Hees v27</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -167,7 +167,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v26</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v27</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -983,19 +983,16 @@ function rNight() {
   let html = ''; let grand = 0;
   orderedBowlers(wn).forEach(b => {
     const fee = feesFor(b.id, wn); grand += fee;
-    const hang = w.hangings?.[b.id] || 0;
-    const over10 = wn === 36 && overTenDrop(b.id);
-    html += `<div class="feerow">
+    const items = feeBreakdown(b.id, wn);
+    html += `<div class="feerow" style="border-bottom:none;padding-bottom:2px">
       <span class="dot" style="background:${col(b)}"></span>
-      <div style="flex:1">
-        <div style="font-weight:600">${b.name}</div>
-        ${hang>0?`<div class="sm">🪝 ${hang} hang${hang>1?'s':''} (${$f(hangVal(hang))})</div>`:''}
-        ${over10 && gi('over10pin')?`<div class="sm" style="color:#ef4444">📉 Over 10-pin drop (${$f(gi('over10pin').fee)})</div>`:''}
-      </div>
+      <span style="flex:1;font-weight:700">${b.name}</span>
       <span class="famount">${$f(fee)}</span>
-    </div>`;
+    </div>` + (items.length
+      ? `<div class="exsub" style="margin-top:0">${exLines(items)}</div>`
+      : `<div class="exsub sm" style="margin-top:0">No charges.</div>`);
   });
-  html += `<div style="padding:10px 0;text-align:right;border-top:1px solid var(--border);font-weight:700;font-size:16px">Total: ${$f(grand)}</div>`;
+  html += `<div style="padding:12px 0 2px;text-align:right;border-top:1px solid var(--border);font-weight:700;font-size:16px">Total: ${$f(grand)}</div>`;
   nsum.innerHTML = html;
 }
 
