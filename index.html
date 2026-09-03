@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v12</title>
+<title>Hee Hees v13</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -150,7 +150,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v12</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v13</span></h1>
   <div style="display:flex;align-items:center;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -523,6 +523,30 @@ function seasonTotals() {
   return out;
 }
 
+// Lineup order: lowest average first, highest average last (the anchor).
+// "Current average" = this week's locked-in avg if we have a week, else the most
+// recent week's, else the Admin starting avg.
+function latestWeekAvgs() {
+  const wns = Object.keys(S.weeks).map(Number).sort((a, b) => b - a);
+  for (const n of wns) if (S.weeks[n]?.avgs) return S.weeks[n].avgs;
+  return null;
+}
+function avgFor(b, wn) {
+  const w = wn ? gw(wn) : null;
+  if (w && w.avgs && w.avgs[b.id] != null) return w.avgs[b.id];
+  const latest = latestWeekAvgs();
+  if (latest && latest[b.id] != null) return latest[b.id];
+  return b.avg;
+}
+function orderedBowlers(wn) {
+  return [...S.bowlers].sort((a, b) => avgFor(a, wn) - avgFor(b, wn));
+}
+function orderIds(ids, wn) {
+  const rank = {};
+  orderedBowlers(wn).forEach((b, i) => { rank[b.id] = i; });
+  return [...ids].sort((a, b) => (rank[a] ?? 99) - (rank[b] ?? 99));
+}
+
 // ── Persistence ───────────────────────────────────────────────────────────────
 // Two layers:
 //   1. localStorage — synchronous, always written on every change. Can't fail,
@@ -760,7 +784,7 @@ function rLive() {
   // Closed week (outside History-edit): read-only "complete" summary, not the grid.
   if (locked) {
     let rows = '', tot = 0;
-    S.bowlers.forEach(b => {
+    orderedBowlers(wn).forEach(b => {
       const fee = feesFor(b.id, wn); tot += fee;
       const isAbs = w.absent?.includes(b.id);
       rows += `<div class="feerow">
@@ -783,7 +807,7 @@ function rLive() {
   }
 
   grid.innerHTML = '';
-  S.bowlers.forEach(b => {
+  orderedBowlers(wn).forEach(b => {
     const playing = w.participating.includes(b.id);
     const absent  = w.absent?.includes(b.id);
     const hangings = w.hangings?.[b.id] || 0;
@@ -843,7 +867,7 @@ function rNight() {
   if (!w) { nsum.innerHTML = '<div class="sm">No active week.</div>'; cwb.style.display='none'; return; }
   cwb.style.display = w.closed ? 'none' : '';   // already closed — nothing to close
   let html = ''; let grand = 0;
-  S.bowlers.forEach(b => {
+  orderedBowlers(wn).forEach(b => {
     const fee = feesFor(b.id, wn); grand += fee;
     const hang = w.hangings?.[b.id] || 0;
     const over10 = wn === 36 && overTenDrop(b.id);
@@ -863,14 +887,14 @@ function rNight() {
 
 function rHistory() {
   const tots = seasonTotals();
-  $('stots').innerHTML = S.bowlers.map(b =>
+  $('stots').innerHTML = orderedBowlers().map(b =>
     `<div class="feerow"><span class="dot" style="background:${b.color}"></span><span style="flex:1;font-weight:600">${b.name}</span><span class="famount">${$f(tots[b.id])}</span></div>`
   ).join('') || '<div class="sm">No data.</div>';
 
   const wns = Object.keys(S.weeks).map(Number).sort((a,b)=>b-a);
   $('wlog').innerHTML = wns.length ? wns.map(wn => {
     const w = S.weeks[wn];
-    const fees = S.bowlers.map(b=>`<span style="color:${b.color}">${b.initials}:${$f(feesFor(b.id,wn))}</span>`).join(' ');
+    const fees = orderedBowlers(wn).map(b=>`<span style="color:${b.color}">${b.initials}:${$f(feesFor(b.id,wn))}</span>`).join(' ');
     return `<div class="feerow">
       <div style="flex:1">
         <div style="font-weight:600">Week ${wn} <span class="sm">${w.date||''}</span></div>
@@ -975,7 +999,7 @@ $('swbtn').addEventListener('click', () => {
   const next = (S.currentWeek || 0) + 1;
   if (next > 36) return;
   $('sw-wn').textContent = next;
-  $('sw-list').innerHTML = S.bowlers.map(b =>
+  $('sw-list').innerHTML = orderedBowlers().map(b =>
     `<div class="swrow">
       <span class="dot" style="background:${b.color};width:12px;height:12px"></span>
       <span style="flex:1;font-weight:600">${b.name}</span>
@@ -1293,7 +1317,7 @@ async function fetchAndVerify() {
 
     // Render results
     let html2 = '';
-    participating.forEach(bid => {
+    orderIds(participating, wn).forEach(bid => {
       const b = gb(bid); if (!b) return;
       const lh = logH(bid), ch = calcH[bid] || 0;
       const lx = logX(bid), cx = calcX[bid] || 0;
