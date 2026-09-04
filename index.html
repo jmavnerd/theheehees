@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v35</title>
+<title>Hee Hees v36</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -172,7 +172,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v35</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v36</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -253,6 +253,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
     </div>
     <div class="card mt12">
       <div class="ch">Bowler Starting Averages</div>
+      <div class="cb sm" style="padding-bottom:0">The starting (book) average counts as 9 games; imported week scores blend in on top to give the running average used when a week is started.</div>
       <div id="adm-bowlers" class="cb"></div>
     </div>
     <div class="card mt12">
@@ -302,6 +303,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
   <div class="msh">
     <div class="mhd"></div>
     <div class="mttl">Start Week <span id="sw-wn"></span></div>
+    <div class="sm" style="margin:-6px 0 10px">Averages pre-filled from imported scores (blended). Edit any before starting.</div>
     <div id="sw-list"></div>
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn bg" style="flex:1" onclick="closeM('m-sw')">Cancel</button>
@@ -681,6 +683,40 @@ function paymentsFor(bid) {
 }
 function paidTotal(bid) {
   return +(S.payments || []).reduce((s, p) => p.bid === bid ? s + (+p.amount || 0) : s, 0).toFixed(2);
+}
+
+// ── Running average ─────────────────────────────────────────────────────────
+// Blended "book + actual": the Admin starting average (b.avg) is credited as
+// BOOK_GAMES games, then every imported game score is added on top. Stable in
+// the early weeks, converges to true scoring average over the season.
+// w.scores[bid] = [g1, g2, g3] is written from a verified score import.
+const BOOK_GAMES = 9;
+
+// Every imported game score (>0) for one bowler, weeks 1..throughWn (all if null).
+function bowlerGameScores(bid, throughWn) {
+  const out = [];
+  Object.keys(S.weeks).map(Number).sort((a, b) => a - b).forEach(wn => {
+    if (throughWn != null && wn > throughWn) return;
+    const s = S.weeks[wn]?.scores?.[bid];
+    if (Array.isArray(s)) s.forEach(g => { if (+g > 0) out.push(+g); });
+  });
+  return out;
+}
+
+function runningAvg(bid, throughWn) {
+  const b = gb(bid); if (!b) return 0;
+  const book = +b.avg || 0;
+  const g = bowlerGameScores(bid, throughWn);
+  const pins = g.reduce((s, x) => s + x, 0);
+  return Math.floor((book * BOOK_GAMES + pins) / (BOOK_GAMES + g.length));
+}
+
+// One "G1 · G2 · G3 = total" line for a bowler in a week, or '' if no scores.
+function scoreLine(wn, bid) {
+  const s = gw(wn)?.scores?.[bid];
+  if (!Array.isArray(s)) return '';
+  const tot = s.reduce((a, c) => a + (+c || 0), 0);
+  return `<div class="exline sm"><span>Games</span><span>${s.map(x => +x || '—').join(' · ')} = ${tot}</span></div>`;
 }
 
 // Itemized charges for one bowler in one week. Σ of .amount === feesFor(bid, wn).
@@ -1139,7 +1175,7 @@ function rHistory() {
       if (perWeek.length) {
         wk = perWeek.map(p => {
           const kk = `sw:${b.id}:${p.wn}`, wopen = histExpanded.has(kk);
-          const detail = wopen ? `<div class="exsub2">${exLines(feeBreakdown(b.id, p.wn))}</div>` : '';
+          const detail = wopen ? `<div class="exsub2">${scoreLine(p.wn, b.id)}${exLines(feeBreakdown(b.id, p.wn))}</div>` : '';
           return `<div class="exline exrow" style="font-weight:600" onclick="event.stopPropagation();toggleHist('${kk}')">
               <span>Week ${p.wn} <span class="excar">${wopen ? '▾' : '▸'}</span></span><span>${$f(p.amount)}</span>
             </div>${detail}`;
@@ -1172,7 +1208,7 @@ function rHistory() {
         const rows = items.length ? exLines(items) : `<div class="exline sm"><span>No charges</span><span></span></div>`;
         return `<div class="exhdr" style="display:flex;justify-content:space-between;font-size:0.74rem">
             <span style="color:${col(b)}">${b.name}</span><span style="color:var(--text)">${$f(feesFor(b.id,wn))}</span>
-          </div><div class="exsub2">${rows}</div>`;
+          </div><div class="exsub2">${scoreLine(wn, b.id)}${rows}</div>`;
       }).join('') + `</div>`;
     }
     return `<div class="feerow exrow" onclick="toggleHist('${k}')">
@@ -1227,9 +1263,14 @@ function delPayment(pid) {
 
 function rAdmin() {
   $('adm-season').value = S.season || '';
-  $('adm-bowlers').innerHTML = S.bowlers.map(b =>
-    `<div class="arow"><span class="dot" style="background:${col(b)}"></span><span style="flex:1">${b.name}</span><input class="ainp" data-bid="${b.id}" type="number" value="${b.avg}" min="0" max="300"/></div>`
-  ).join('');
+  $('adm-bowlers').innerHTML = S.bowlers.map(b => {
+    const n = bowlerGameScores(b.id).length;
+    return `<div class="arow">
+      <span class="dot" style="background:${col(b)}"></span>
+      <span style="flex:1">${b.name}<br><span class="sm" style="font-weight:400">running ${runningAvg(b.id)}${n ? ` · ${n} game${n === 1 ? '' : 's'} in` : ' · no scores yet'}</span></span>
+      <input class="ainp" data-bid="${b.id}" type="number" value="${b.avg}" min="0" max="300"/>
+    </div>`;
+  }).join('');
   $('adm-infs').innerHTML = S.infractions.map(inf =>
     `<div class="arow">
       <input class="ainp" data-name-iid="${inf.id}" type="text" value="${inf.name.replace(/"/g,'&quot;')}" style="flex:1;width:auto;min-width:0;text-align:left" />
@@ -1354,7 +1395,7 @@ $('swbtn').addEventListener('click', () => {
       <span class="dot" style="background:${col(b)};width:12px;height:12px"></span>
       <span style="flex:1;font-weight:600">${b.name}</span>
       <span class="sm" style="margin-right:6px">Avg</span>
-      <input class="avginp" id="sw-avg-${b.id}" type="number" value="${b.avg}" min="0" max="300"/>
+      <input class="avginp" id="sw-avg-${b.id}" type="number" value="${runningAvg(b.id, next - 1)}" min="0" max="300"/>
       <label class="tgl" style="margin-left:10px">
         <input type="checkbox" id="sw-on-${b.id}" ${b.core?'checked':''}>
         <div class="tgl-tr"></div><div class="tgl-th"></div>
@@ -1612,6 +1653,22 @@ function calcVerifyXXXX(games, participating) {
   return x;
 }
 
+let lastVerify = null;   // { wn, editing, scores:{bid:[g1,g2,g3]} } from the last successful verify
+
+// Write the last verify's game totals into that week's w.scores (feeds the
+// running average). Only for the current week, or a week open via History→Edit.
+function applyLastVerify() {
+  const v = lastVerify;
+  if (!v || !v.wn) { alert('Run a verify first.'); return; }
+  const w = gw(v.wn);
+  if (!w) { alert('That week no longer exists.'); return; }
+  if (w.closed && !v.editing) { alert(`Week ${v.wn} is closed. Open it from History → Edit first.`); return; }
+  w.scores = Object.assign({}, w.scores, v.scores);
+  save(); render();
+  const st = $('verify-status');
+  if (st) st.textContent = `✓ Saved scores for ${Object.keys(v.scores).length} bowlers to Week ${v.wn}`;
+}
+
 async function fetchAndVerify() {
   const url = $('vurl').value.trim();
   if (!url) { alert('Paste a URL first.'); return; }
@@ -1672,6 +1729,12 @@ async function fetchAndVerify() {
       gameTotals[bid] = [0,1,2].map(g => games[g]?.[bid]?.total || 0);
     });
 
+    // Stash for the "Save these scores to Week N" button below.
+    lastVerify = { wn, editing: !!editingWeek, scores: {} };
+    participating.forEach(bid => {
+      if (!w?.absent?.includes(bid)) lastVerify.scores[bid] = gameTotals[bid];
+    });
+
     // Flags
     const flags = {};
     participating.forEach(bid => {
@@ -1729,7 +1792,14 @@ async function fetchAndVerify() {
       </div>`;
     });
 
-    $('verify-results').innerHTML = dbgHtml + html2;
+    const canApply = wn && (editingWeek || !w?.closed);
+    const applyBtn = canApply
+      ? `<button class="btn bs bw" style="margin-bottom:12px" onclick="applyLastVerify()">Save these scores to Week ${wn}</button>`
+      : wn
+        ? `<div class="sm" style="margin-bottom:12px">Week ${wn} is closed — open it from History → Edit to import scores.</div>`
+        : `<div class="sm" style="margin-bottom:12px">Start a week to save these scores to it.</div>`;
+
+    $('verify-results').innerHTML = dbgHtml + applyBtn + html2;
     status.textContent = `✓ Verified ${games.length} games`;
   } catch(e) {
     status.textContent = `Error: ${e.message}`;
