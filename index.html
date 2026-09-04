@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v39</title>
+<title>Hee Hees v40</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -87,13 +87,30 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 /* Live tab */
 #pane-live { padding: 0.5rem; }
 .game-sel { display: flex; gap: 0.4rem; margin: 0 -0.5rem 0.5rem; padding: 0.3rem 0.5rem; position: sticky; top: 0; z-index: 5; background: var(--bg); }
-.gbtn { flex: 1; padding: 0.45rem; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-weight: 600; font-size: 0.9rem; cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent; }
-.gbtn.on { background: #3B82F6; border-color: #3B82F6; color: #fff; }
+.gbtn { flex: 1; padding: 0.45rem; border-radius: 8px; border: 1px solid var(--border); background: linear-gradient(180deg, #262a33, #1d2028); color: var(--muted); font-weight: 600; font-size: 0.9rem; cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent; box-shadow: inset 0 1px 0 rgba(255,255,255,.04); transition: box-shadow .12s ease; }
+.gbtn.on { background: linear-gradient(180deg, #4b8ef8, #3B82F6); border-color: #3B82F6; color: #fff; box-shadow: 0 2px 9px -1px rgba(59,130,246,.5), inset 0 1px 0 rgba(255,255,255,.25); }
 
 
 /* Live grid — 2 frame cells per row; each cell split into a column per bowler */
-.fgrid { display: grid; grid-template-columns: repeat(2,1fr); gap: 6px; padding: 0.4rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
-.fcell { position: relative; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--surface2); min-height: clamp(98px, 27vw, 156px); padding: 16px 4px 4px; }
+.fgrid { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; box-shadow: inset 0 2px 8px rgba(0,0,0,.35); }
+.fcell {
+  position: relative; display: flex; flex-direction: column;
+  border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  background: linear-gradient(180deg, #363b4a 0%, #2c303b 48%, #23262e 100%);
+  min-height: clamp(98px, 27vw, 156px); padding: 16px 4px 4px;
+  box-shadow:
+    0 2px 6px -1px rgba(0,0,0,.42),
+    inset 0 1px 0 rgba(255,255,255,.07),
+    inset 0 -14px 18px -14px rgba(0,0,0,.55);
+  transition: box-shadow .12s ease, transform .12s ease;
+}
+.fcell:active {
+  transform: translateY(1px);
+  box-shadow:
+    0 1px 2px rgba(0,0,0,.35),
+    inset 0 1px 0 rgba(255,255,255,.04),
+    inset 0 2px 9px rgba(0,0,0,.45);
+}
 .fnum { position: absolute; top: 3px; left: 6px; z-index: 1; font-size: 0.82rem; font-weight: 700; color: var(--pink); }
 .fnames { display: flex; }
 .fnames > div { flex: 1; min-width: 0; text-align: center; font-size: 0.82rem; font-weight: 800; text-transform: uppercase; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -107,7 +124,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .leg i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 /* per-game running total per bowler */
 .gtot { display: flex; gap: 5px; margin-bottom: 6px; }
-.gtot > div { flex: 1; min-width: 0; text-align: center; border: 1px solid var(--border); border-radius: 8px; padding: 4px 2px 5px; background: var(--surface2); }
+.gtot > div { flex: 1; min-width: 0; text-align: center; border: 1px solid var(--border); border-radius: 8px; padding: 4px 2px 5px; background: linear-gradient(180deg, #313644, #262a33); box-shadow: 0 1px 3px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.05); }
 .gtot .n { display: block; font-size: 0.74rem; font-weight: 800; text-transform: uppercase; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .gtot .v { display: block; font-size: 0.95rem; font-weight: 700; margin-top: 1px; }
 /* frame modal — bowler tab strip (always visible; pick one, toggles appear below) */
@@ -172,7 +189,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v39</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v40</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
