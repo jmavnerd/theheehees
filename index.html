@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v37</title>
+<title>Hee Hees v38</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -172,7 +172,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v37</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v38</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -207,6 +207,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 
   <!-- VERIFY -->
   <div id="pane-verify" class="pane">
+    <div id="verify-edit-note" style="display:none;background:rgba(245,158,11,.15);border:1px solid #F59E0B;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-weight:600;color:#F59E0B"></div>
     <div class="card">
       <div class="ch">Score Verification</div>
       <div class="cb">
@@ -1024,8 +1025,11 @@ document.addEventListener('visibilitychange', () => {
 function render() { rHdr(); rLive(); rNight(); rHistory(); rAdmin(); }
 
 function rHdr() {
-  const wn = S.currentWeek;
-  $('week-badge').textContent = wn ? `Week ${wn} of 36` : 'No active week';
+  const ew = editingWeek;
+  const wn = ew || S.currentWeek;
+  $('week-badge').textContent = wn
+    ? `Week ${wn} of 36${ew ? ' · editing' : ''}`
+    : 'No active week';
 }
 
 function rLive() {
@@ -1331,14 +1335,22 @@ function delInfraction(id) {
 // ── Tab nav ───────────────────────────────────────────────────────────────────
 function tab(name, el) {
   if (name !== 'admin') adminUnlocked = false;
-  if (name !== 'live') editingWeek = null;
+  // Week-edit mode spans Live (toggle infractions) and Verify (import scores);
+  // any other tab exits it.
+  if (name !== 'live' && name !== 'verify') editingWeek = null;
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.tb').forEach(b=>b.classList.remove('on'));
   $(`pane-${name}`).classList.add('on');
   el.classList.add('on');
+  rHdr();                             // reflect entering / leaving week-edit mode
   if (name==='live')    rLive();      // e.g. entering History-edit mode
   if (name==='night')   rNight();
   if (name==='history') rHistory();
+  const ven = $('verify-edit-note');
+  if (ven) {
+    ven.style.display = editingWeek ? 'block' : 'none';
+    ven.textContent  = editingWeek ? `✏️ Editing Week ${editingWeek} — imports save to Week ${editingWeek}` : '';
+  }
 }
 
 // ── Edit past week ────────────────────────────────────────────────────────────
@@ -1556,26 +1568,26 @@ function ballVal(s) {
   const n = parseInt(s); return isNaN(n) ? 0 : n;
 }
 
+// Match a score-sheet name to one of our bowlers.
+//   rank 0 = exact full name
+//   rank 1 = same last name AND same first initial
+// No first-name-only fallback: the sheet lists BOTH teams, so a "John <someone
+// else>" row would otherwise be claimed as John Merritt and clobber his score.
 function matchBowler(scoreName) {
-  const sn = scoreName.toLowerCase().trim();
-  const snParts = sn.split(' ');
-  const snFirst = snParts[0];
-  const snLast  = snParts[snParts.length - 1];
+  const sn = (scoreName || '').toLowerCase().trim();
+  const p  = sn.split(/\s+/);
+  const snFirst = p[0] || '', snLast = p[p.length - 1] || '';
 
-  // Exact full name
-  let m = S.bowlers.find(b => b.name.toLowerCase() === sn); if (m) return m;
+  let b = S.bowlers.find(x => x.name.toLowerCase() === sn);
+  if (b) return { bowler: b, rank: 0 };
 
-  // Last name match + first name initial must also match (prevents Kenny Eberhardt → TJ)
-  m = S.bowlers.find(b => {
-    const bParts = b.name.toLowerCase().split(' ');
-    const bFirst = bParts[0];
-    const bLast  = bParts[bParts.length - 1];
-    return bLast === snLast && bFirst[0] === snFirst[0];
-  });
-  if (m) return m;
+  b = p.length > 1 ? S.bowlers.find(x => {
+    const bp = x.name.toLowerCase().split(/\s+/);
+    return bp[bp.length - 1] === snLast && bp[0][0] === snFirst[0];
+  }) : null;
+  if (b) return { bowler: b, rank: 1 };
 
-  // First name exact match only (fallback)
-  return S.bowlers.find(b => b.name.toLowerCase().split(' ')[0] === snFirst) || null;
+  return { bowler: null, rank: 9 };
 }
 
 function parseScoreSheet(html) {
@@ -1587,8 +1599,7 @@ function parseScoreSheet(html) {
     const game = {};
     gt.querySelectorAll('tr.notranslate').forEach(row => {
       const nameEl = row.querySelector('.cls_player'); if (!nameEl) return;
-      const rawName = nameEl.textContent.trim();
-      const bowler = matchBowler(rawName);
+      const { bowler, rank } = matchBowler(nameEl.textContent.trim());
       if (!bowler) return;
 
       const frames = [];
@@ -1614,11 +1625,15 @@ function parseScoreSheet(html) {
         if (tot) total = parseInt(tot.textContent.trim()) || 0;
       });
 
-      // Don't overwrite real data with a blank/zero row (e.g. substitute with same last name)
-      if (!game[bowler.id] || total > 0) {
-        game[bowler.id] = { frames, total };
+      // Keep the best row for each bowler: a stronger name match (lower rank)
+      // always wins; at equal rank, the row that actually has a score wins so a
+      // blank substitute line can't wipe real data.
+      const cur = game[bowler.id];
+      if (!cur || rank < cur._rank || (rank === cur._rank && total > 0 && !(cur.total > 0))) {
+        game[bowler.id] = { frames, total, _rank: rank };
       }
     });
+    Object.values(game).forEach(v => { delete v._rank; });
     games.push(game);
   });
 
