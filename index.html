@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v38</title>
+<title>Hee Hees v39</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -172,7 +172,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v38</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v39</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -1027,9 +1027,13 @@ function render() { rHdr(); rLive(); rNight(); rHistory(); rAdmin(); }
 function rHdr() {
   const ew = editingWeek;
   const wn = ew || S.currentWeek;
-  $('week-badge').textContent = wn
-    ? `Week ${wn} of 36${ew ? ' · editing' : ''}`
+  const b = $('week-badge');
+  b.textContent = wn
+    ? `Week ${wn} of 36${ew ? ' · editing ✕' : ''}`
     : 'No active week';
+  b.style.cursor = ew ? 'pointer' : '';       // tap the badge to leave edit mode, from any tab
+  b.title = ew ? 'Tap to stop editing' : '';
+  b.onclick = ew ? exitEditing : null;
 }
 
 function rLive() {
@@ -1335,21 +1339,22 @@ function delInfraction(id) {
 // ── Tab nav ───────────────────────────────────────────────────────────────────
 function tab(name, el) {
   if (name !== 'admin') adminUnlocked = false;
-  // Week-edit mode spans Live (toggle infractions) and Verify (import scores);
-  // any other tab exits it.
-  if (name !== 'live' && name !== 'verify') editingWeek = null;
+  // Week-edit mode is sticky — it persists across every tab and only ends via
+  // "Done" or tapping the header badge (exitEditing).
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.tb').forEach(b=>b.classList.remove('on'));
   $(`pane-${name}`).classList.add('on');
   el.classList.add('on');
-  rHdr();                             // reflect entering / leaving week-edit mode
+  rHdr();
   if (name==='live')    rLive();      // e.g. entering History-edit mode
   if (name==='night')   rNight();
   if (name==='history') rHistory();
   const ven = $('verify-edit-note');
   if (ven) {
     ven.style.display = editingWeek ? 'block' : 'none';
-    ven.textContent  = editingWeek ? `✏️ Editing Week ${editingWeek} — imports save to Week ${editingWeek}` : '';
+    ven.innerHTML = editingWeek
+      ? `✏️ Editing Week ${editingWeek} — imports save to Week ${editingWeek} <button class="btn" style="background:#F59E0B;color:#000;padding:4px 12px;font-size:0.8rem;margin-left:8px" onclick="doneEditing()">Done</button>`
+      : '';
   }
 }
 
@@ -1362,10 +1367,20 @@ function editWeek(wn) {
 function deleteWeek(wn) {
   if (!confirm(`Delete Week ${wn} and all its data? This cannot be undone.`)) return;
   delete S.weeks[wn];
+  if (editingWeek === wn) editingWeek = null;
   if (S.currentWeek === wn) S.currentWeek = Math.max(0, ...Object.keys(S.weeks).map(Number)) || null;
   save(); render();
 }
 
+// Leave edit mode without changing tabs (header-badge tap).
+function exitEditing() {
+  if (!editingWeek) return;
+  editingWeek = null;
+  save();
+  render();
+}
+
+// Leave edit mode and return to the week list.
 function doneEditing() {
   editingWeek = null;
   save();
