@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v41</title>
+<title>Hee Hees v42</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -197,7 +197,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v41</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v42</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -1148,7 +1148,7 @@ function rLive() {
   const fg = document.createElement('div'); fg.className = 'fgrid';
   for (let f = 0; f < 10; f++) {
     const cell = document.createElement('div'); cell.className = 'fcell';
-    const names = roster.map(b => `<div style="color:${col(b)}">${b.name.split(' ')[0]}</div>`).join('');
+    const names = roster.map(b => `<div style="color:${col(b)}">${b.initials || b.name.split(/\s+/).map(w => w[0]).join('').toUpperCase()}</div>`).join('');
     const cols = roster.map(b => {
       const c = col(b);
       const chips = (w.games?.[curGame]?.[b.id]?.frames?.[f] || []).map(iid => chipFor(iid, c)).join('');
@@ -1553,6 +1553,8 @@ function openFrame(gidx, fidx, bid) {
 
 function fmPick(bid) {
   const w = gw(editingWeek || S.currentWeek); if (!w) return;
+  if (fmCtx.bid === bid) return;                       // already on this tab
+  if (fmCtx.bid) persistFrame(fmCtx.bid);              // auto-save the tab we're leaving
   fmCtx.bid = bid;
   renderFmBowlers();
   fmInfs = new Set(w.games?.[fmCtx.gidx]?.[bid]?.frames?.[fmCtx.fidx] || []);
@@ -1573,16 +1575,31 @@ function fmPick(bid) {
 
 function togInf(id, on) { on ? fmInfs.add(id) : fmInfs.delete(id); }
 
-function saveFrame() {
-  const { bid, gidx, fidx } = fmCtx;
-  const w = gw(editingWeek || S.currentWeek); if (!w || !bid) return;
-  if (w.closed && !editingWeek) { closeM('m-frame'); return; }
+// Write one bowler's current in-memory toggles (fmInfs) into their frame.
+// No modal close, no Live re-render — shared by Save and by a tab switch, so
+// switching bowlers inside the modal no longer drops unsaved toggles.
+// Returns true if it actually changed anything.
+function persistFrame(bid) {
+  const { gidx, fidx } = fmCtx;
+  const w = gw(editingWeek || S.currentWeek);
+  if (!w || !bid) return false;
+  if (w.closed && !editingWeek) return false;
+  const saved = w.games?.[gidx]?.[bid]?.frames?.[fidx] || [];
+  const next = [...fmInfs];
+  const same = saved.length === next.length && saved.every(x => next.includes(x));
+  if (same) return false;                              // nothing to write / push
   if (!w.games[gidx]) w.games[gidx] = {};
   if (!w.games[gidx][bid]) w.games[gidx][bid] = { frames: Array(10).fill(null).map(() => []) };
-  w.games[gidx][bid].frames[fidx] = [...fmInfs];
+  w.games[gidx][bid].frames[fidx] = next;
   if (!w.hangings) w.hangings = {};
   w.hangings[bid] = hungCountW(bid, w);   // keep the denormalised night total in sync
-  closeM('m-frame'); save(); rLive();
+  save();
+  return true;
+}
+
+function saveFrame() {
+  if (fmCtx.bid) persistFrame(fmCtx.bid);
+  closeM('m-frame'); rLive();
 }
 
 // ── Modal helpers ─────────────────────────────────────────────────────────────
