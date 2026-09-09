@@ -139,22 +139,54 @@ Total hanging fee = sum of all instances using the scale above, cycling back to 
 
 ## Score Verification Flow
 
+> **Implementation note (v36+):** the original Claude `sendPrompt()` / `VERIFY_RESULT`
+> copy-paste round-trip below is no longer used. The Verify tab now fetches the
+> score URL directly through `/api/proxy` (with public-proxy fallbacks), parses
+> the sheet in `parseScoreSheet()`, and runs `calcVerifyHangings()` /
+> `calcVerifyXXXX()` in-browser. The rest of this section is kept for reference.
+
 After bowling, the team receives a score URL via email (from syncpassport.com). The verification flow:
 
-1. User pastes the score URL into the **Verify tab**
-2. App sends a `VERIFY_SCORES|...` message to Claude via `sendPrompt()`
-3. Claude fetches the URL, parses all 3 games frame by frame
-4. Claude applies the hanging and XXXX rules exactly
-5. Claude responds with a `VERIFY_RESULT|{JSON}` block
-6. User copies that line and pastes it into Step 2 of the Verify tab
-7. App parses the JSON and displays a comparison against what was manually logged
+1. User pastes the score URL into the **Verify tab** and taps **Fetch & Verify**
+2. App fetches + parses all 3 games frame by frame
+3. App recomputes hangings and XXXX from the sheet and shows, per bowler,
+   `Logged X / Calc Y` (green when equal, red when not) plus flag chips
+   (HIGH GAME / LOW GAME / UNDER 500 / SWEPT)
 
-### sendPrompt format
+### Mismatch correction (v41)
+
+When Logged ≠ Calc, the comparison lists the **exact frames** to change,
+directly under the red line:
+
+- `➕ Add 🪝 — Game 2, Frame 7 · solo non-striker`
+- `➖ Remove ✖️ XXXX — Game 1, Frame 3`
+
+Each row is tappable → opens that frame's modal (bowler pre-selected) so the
+marker can be toggled by hand. Rows are only shown for the week currently in
+scope (`editingWeek || currentWeek`); a closed week must be opened via
+**History → Edit** first.
+
+An **Apply Fix (N)** button applies every listed correction at once:
+
+- Gated behind the Admin PIN (`requireAdmin`)
+- Blocked on a closed week unless opened via History → Edit
+- `confirm()` dialog lists every add/remove before writing
+- Writes **only** `hung` / `xxxx` frame markers — never scores or other
+  infractions
+- `hung` stays one-per-frame (a same-frame double-hung spills its second marker
+  to the next hang-free frame in that game, mirroring `migrateHangs()`);
+  `xxxx` may stack in a frame (each is a separate team charge)
+- Resyncs `w.hangings[bid]` (`hungCountW`) afterward
+- Games where the per-frame attribution differs but the marker **count** already
+  matches are treated as correct (no fee depends on which frame within a game a
+  marker sits in)
+
+### Legacy sendPrompt format (unused)
 ```
 VERIFY_SCORES|url={URL}|bowlers={Name}={id}:avg={avg},...|week={weekNumber}
 ```
 
-### VERIFY_RESULT JSON format
+### Legacy VERIFY_RESULT JSON format (unused)
 ```json
 {
   "gil": { "hangings": 1, "xxxx": 1, "swept": false, "highGame": false, "lowGame": false, "under500": false },

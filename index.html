@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v40</title>
+<title>Hee Hees v41</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -171,6 +171,14 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 .bad { color: #ef4444; font-weight: 700; }
 .flg { color: #F59E0B; font-weight: 700; }
 
+/* Verify per-frame fix list */
+.vfix { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 2px; }
+.vfixrow { font-size: 0.72rem; line-height: 1.3; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.vfixrow:active { filter: brightness(1.35); }
+.vfixadd { border-left: 3px solid #22c55e; }
+.vfixrem { border-left: 3px solid #ef4444; }
+.vfixflat { cursor: default; opacity: .8; }
+
 /* Admin */
 .arow { display: flex; align-items: center; padding: 0.65rem 0; border-bottom: 1px solid var(--border); gap: 0.5rem; }
 .arow:last-child { border-bottom: none; }
@@ -189,7 +197,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v40</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v41</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -1672,8 +1680,13 @@ function parseScoreSheet(html) {
   return games; // Array of 3 game objects
 }
 
+// Returns { counts:{bid:n}, where:{bid:[{g,f,reason}]} }.
+// reason: 'solo' (other 3 struck, this bowler didn't) | 'all4-low' (lowest
+// first ball in the frame after an all-4). A double-hung frame yields two
+// entries for the same (g,f).
 function calcVerifyHangings(games, participating) {
-  const h = {}; participating.forEach(bid => h[bid] = 0);
+  const h = {}, where = {};
+  participating.forEach(bid => { h[bid] = 0; where[bid] = []; });
   let pendingAll4 = false;
 
   for (let g = 0; g < 3; g++) {
@@ -1686,14 +1699,14 @@ function calcVerifyHangings(games, participating) {
       if (pendingAll4) {
         let lowest = 11;
         participating.forEach(bid => { const v = ballVal(b1s[bid]); if (v < lowest) lowest = v; });
-        participating.forEach(bid => { if (ballVal(b1s[bid]) === lowest) h[bid]++; });
+        participating.forEach(bid => { if (ballVal(b1s[bid]) === lowest) { h[bid]++; where[bid].push({ g, f, reason: 'all4-low' }); } });
         pendingAll4 = false;
       }
 
       // Solo non-striker
       if (strikers.size === 3) {
         const ns = participating.find(bid => !strikers.has(bid));
-        if (ns) h[ns]++;
+        if (ns) { h[ns]++; where[ns].push({ g, f, reason: 'solo' }); }
       }
 
       // All-4 → set up next frame
@@ -1704,28 +1717,36 @@ function calcVerifyHangings(games, participating) {
       }
     }
   }
-  return h;
+  return { counts: h, where };
 }
 
+// Returns { counts:{bid:n}, where:{bid:[{g,f}]} }. Each instance is attributed
+// to the frame where the 4th (or later) consecutive strike lands.
 function calcVerifyXXXX(games, participating) {
-  const x = {}; participating.forEach(bid => x[bid] = 0);
+  const x = {}, where = {};
+  participating.forEach(bid => { x[bid] = 0; where[bid] = []; });
 
   for (let g = 0; g < 3; g++) {
     participating.forEach(bid => {
-      const seq = [];
-      for (let f = 0; f < 9; f++) seq.push((games[g]?.[bid]?.frames?.[f]?.[0] || '').trim() === 'X');
-      // Frame 10: up to 3 balls
+      const seq = []; // { strike:bool, f:int }
+      for (let f = 0; f < 9; f++) seq.push({ strike: (games[g]?.[bid]?.frames?.[f]?.[0] || '').trim() === 'X', f });
+      // Frame 10: up to 3 balls, all attributed to frame index 9
       const f10 = games[g]?.[bid]?.frames?.[9] || [];
-      seq.push((f10[0]||'').trim() === 'X');
-      if ((f10[0]||'').trim() === 'X') seq.push((f10[1]||'').trim() === 'X');
-      if ((f10[0]||'').trim() === 'X' && (f10[1]||'').trim() === 'X') seq.push((f10[2]||'').trim() === 'X');
+      const b1 = (f10[0]||'').trim() === 'X';
+      const b2 = (f10[1]||'').trim() === 'X';
+      const b3 = (f10[2]||'').trim() === 'X';
+      seq.push({ strike: b1, f: 9 });
+      if (b1) seq.push({ strike: b2, f: 9 });
+      if (b1 && b2) seq.push({ strike: b3, f: 9 });
 
-      let consec = 0, instances = 0;
-      seq.forEach(s => { if (s) { consec++; if (consec >= 4) instances++; } else consec = 0; });
-      x[bid] += instances;
+      let consec = 0;
+      seq.forEach(s => {
+        if (s.strike) { consec++; if (consec >= 4) { x[bid]++; where[bid].push({ g, f: s.f }); } }
+        else consec = 0;
+      });
     });
   }
-  return x;
+  return { counts: x, where };
 }
 
 let lastVerify = null;   // { wn, editing, scores:{bid:[g1,g2,g3]} } from the last successful verify
@@ -1742,6 +1763,131 @@ function applyLastVerify() {
   save(); render();
   const st = $('verify-status');
   if (st) st.textContent = `✓ Saved scores for ${Object.keys(v.scores).length} bowlers to Week ${v.wn}`;
+}
+
+// ── Verify: per-frame correction diff ─────────────────────────────────────────
+
+// Per-frame count of a marker ('hung' | 'xxxx') across a week's 3 games for one
+// bowler → { "g-f": count }.
+function markerFrameMap(w, bid, marker) {
+  const m = {};
+  for (let g = 0; g < 3; g++) {
+    const bg = w?.games?.[g]?.[bid]; if (!bg) continue;
+    for (let f = 0; f < 10; f++) {
+      const c = (bg.frames?.[f] || []).filter(x => x === marker).length;
+      if (c) m[g + '-' + f] = c;
+    }
+  }
+  return m;
+}
+
+// calc where[] array → { "g-f": count }
+function whereCountMap(arr) {
+  const m = {};
+  (arr || []).forEach(({ g, f }) => { const k = g + '-' + f; m[k] = (m[k] || 0) + 1; });
+  return m;
+}
+
+// Compare logged vs calc per frame → [{ g, f, delta, reason }], delta>0 = add,
+// delta<0 = remove. Sorted by game then frame.
+//
+// Games whose logged marker COUNT already equals the calc count are dropped
+// whole: the per-frame attribution may differ (e.g. calc stacks a double-hung
+// in one frame while the app spread it across two), but no fee depends on which
+// frame within a game a hang/XXXX sits in, so there is nothing to correct.
+function frameDiff(loggedMap, calcMap, calcWhereArr) {
+  const reasons = {};
+  (calcWhereArr || []).forEach(({ g, f, reason }) => { if (reason) reasons[g + '-' + f] = reason; });
+
+  const gTot = map => { const t = [0, 0, 0]; Object.entries(map).forEach(([k, c]) => { t[+k.split('-')[0]] += c; }); return t; };
+  const lg = gTot(loggedMap), cg = gTot(calcMap);
+
+  const out = [];
+  new Set([...Object.keys(loggedMap), ...Object.keys(calcMap)]).forEach(k => {
+    const delta = (calcMap[k] || 0) - (loggedMap[k] || 0);
+    if (!delta) return;
+    const [g, f] = k.split('-').map(Number);
+    if (lg[g] === cg[g]) return; // game count already right — attribution noise only
+    out.push({ g, f, delta, reason: reasons[k] || '' });
+  });
+  return out.sort((a, b) => a.g - b.g || a.f - b.f);
+}
+
+const FIX_LABEL = { hung: '🪝 Hung', xxxx: '✖️ XXXX' };
+
+function fixRowsHtml(diffs, marker, bid, tappable) {
+  if (!diffs.length) return '';
+  return `<div class="vfix">` + diffs.map(d => {
+    const add = d.delta > 0;
+    const n = Math.abs(d.delta);
+    const why = d.reason === 'solo' ? ' · solo non-striker'
+              : d.reason === 'all4-low' ? ' · lowest ball after all-4'
+              : '';
+    const tap = tappable ? ` onclick="openFrame(${d.g},${d.f},'${bid}')"` : '';
+    return `<div class="vfixrow ${add ? 'vfixadd' : 'vfixrem'}${tappable ? '' : ' vfixflat'}"${tap}>`
+      + `${add ? '➕ Add' : '➖ Remove'} ${FIX_LABEL[marker]}${n > 1 ? ' ×' + n : ''} — Game ${d.g + 1}, Frame ${d.f + 1}${why}`
+      + `</div>`;
+  }).join('') + `</div>`;
+}
+
+let lastFix = null;   // { wn, editing, items:[{bid,g,f,marker,delta}] }
+
+function applyFix() {
+  const fx = lastFix;
+  if (!fx || !fx.items || !fx.items.length) { alert('Run a verify first — nothing to fix.'); return; }
+  requireAdmin(() => doApplyFix(fx));
+}
+
+function doApplyFix(fx) {
+  const w = gw(fx.wn);
+  if (!w) { alert('That week no longer exists.'); return; }
+  if (w.closed && editingWeek !== fx.wn) {
+    alert(`Week ${fx.wn} is closed. Open it from History → Edit first.`); return;
+  }
+
+  const lines = fx.items.map(it => {
+    const b = gb(it.bid);
+    const act = it.delta > 0 ? `+${Math.abs(it.delta)}` : `−${Math.abs(it.delta)}`;
+    return `• ${b ? b.name : it.bid}: ${act} ${it.marker === 'hung' ? 'Hung' : 'XXXX'} @ G${it.g + 1} F${it.f + 1}`;
+  });
+  if (!confirm(`Apply ${fx.items.length} correction(s) to Week ${fx.wn}?\n\n${lines.join('\n')}\n\nEdits only Hung / XXXX markers — scores and other infractions are untouched.`)) return;
+
+  fx.items.forEach(it => {
+    if (!w.games[it.g]) w.games[it.g] = {};
+    if (!w.games[it.g][it.bid]) w.games[it.g][it.bid] = { frames: Array(10).fill(null).map(() => []) };
+    const frames = w.games[it.g][it.bid].frames;
+    for (let f = 0; f < 10; f++) if (!frames[f]) frames[f] = [];
+    let d = it.delta;
+
+    // Remove: pull one marker per unit from the target frame.
+    while (d < 0) { const i = frames[it.f].lastIndexOf(it.marker); if (i === -1) break; frames[it.f].splice(i, 1); d++; }
+
+    // Add: 'xxxx' may stack in a frame (each is a separate team charge). 'hung'
+    // is one-per-frame in this model (hungCountW / gameHangFee count frames, not
+    // occurrences), so a second hang for the same frame spills to the next
+    // hang-free frame in that game — same rule migrateHangs() uses.
+    while (d > 0) {
+      if (it.marker === 'xxxx' || !frames[it.f].includes('hung')) {
+        frames[it.f].push(it.marker);
+      } else {
+        let placed = false;
+        for (let k = 1; k < 10 && !placed; k++) {
+          const f2 = (it.f + k) % 10;
+          if (!frames[f2].includes('hung')) { frames[f2].push('hung'); placed = true; }
+        }
+        if (!placed) frames[it.f].push('hung'); // all 10 frames already hung — stack anyway
+      }
+      d--;
+    }
+  });
+
+  // Resync the denormalised night hanging totals for touched bowlers.
+  if (!w.hangings) w.hangings = {};
+  [...new Set(fx.items.map(i => i.bid))].forEach(bid => { w.hangings[bid] = hungCountW(bid, w); });
+
+  save(); render();
+  const st = $('verify-status');
+  if (st) st.textContent = `✓ Applied ${fx.items.length} correction(s) to Week ${fx.wn} — re-run Fetch & Verify to confirm`;
 }
 
 async function fetchAndVerify() {
@@ -1795,8 +1941,9 @@ async function fetchAndVerify() {
     const participating = w?.participating || S.bowlers.map(b => b.id);
     const avgs = w?.avgs || Object.fromEntries(S.bowlers.map(b => [b.id, b.avg]));
 
-    const calcH = calcVerifyHangings(games, participating);
-    const calcX = calcVerifyXXXX(games, participating);
+    const calcHRes = calcVerifyHangings(games, participating);
+    const calcXRes = calcVerifyXXXX(games, participating);
+    const calcH = calcHRes.counts, calcX = calcXRes.counts;
 
     // Game totals per bowler
     const gameTotals = {}; // bowlerId → [g1, g2, g3]
@@ -1832,12 +1979,27 @@ async function fetchAndVerify() {
     const logH = bid => w?.hangings?.[bid] || 0;
     const logX = bid => countInf(bid, 'xxxx', wn);
 
+    // Can corrections be written to this week right now? (matches applyLastVerify)
+    const canApply = wn && (editingWeek || !w?.closed);
+
+    // Per-frame correction diffs (only meaningful when a real week is in scope)
+    const fixItems = [];
+    const diffFor = bid => {
+      if (!w) return { h: [], x: [] };
+      const hd = frameDiff(markerFrameMap(w, bid, 'hung'), whereCountMap(calcHRes.where[bid]), calcHRes.where[bid]);
+      const xd = frameDiff(markerFrameMap(w, bid, 'xxxx'), whereCountMap(calcXRes.where[bid]), calcXRes.where[bid]);
+      hd.forEach(d => fixItems.push({ bid, g: d.g, f: d.f, marker: 'hung', delta: d.delta }));
+      xd.forEach(d => fixItems.push({ bid, g: d.g, f: d.f, marker: 'xxxx', delta: d.delta }));
+      return { h: hd, x: xd };
+    };
+
     // Render results
     let html2 = '';
     orderIds(participating, wn).forEach(bid => {
       const b = gb(bid); if (!b) return;
       const lh = logH(bid), ch = calcH[bid] || 0;
       const lx = logX(bid), cx = calcX[bid] || 0;
+      const df = diffFor(bid);
       const fl = flags[bid];
       const fTags = [
         fl.highGame ? `<span class="flg">HIGH GAME</span>` : '',
@@ -1858,23 +2020,33 @@ async function fetchAndVerify() {
             <span style="flex:1;font-weight:600">🪝 Hangings</span>
             <span class="${lh===ch?'ok':'bad'}" style="font-size:1rem;font-weight:700">Logged ${lh} / Calc ${ch}</span>
           </div>
+          ${fixRowsHtml(df.h, 'hung', bid, canApply)}
           <div style="display:flex;gap:12px;align-items:center">
             <span style="flex:1;font-weight:600">✖️ XXXX</span>
             <span class="${lx===cx?'ok':'bad'}" style="font-size:1rem;font-weight:700">Logged ${lx} / Calc ${cx}</span>
           </div>
+          ${fixRowsHtml(df.x, 'xxxx', bid, canApply)}
           ${fTags.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${fTags.join('')}</div>` : ''}
         </div>
       </div>`;
     });
 
-    const canApply = wn && (editingWeek || !w?.closed);
     const applyBtn = canApply
       ? `<button class="btn bs bw" style="margin-bottom:12px" onclick="applyLastVerify()">Save these scores to Week ${wn}</button>`
       : wn
         ? `<div class="sm" style="margin-bottom:12px">Week ${wn} is closed — open it from History → Edit to import scores.</div>`
         : `<div class="sm" style="margin-bottom:12px">Start a week to save these scores to it.</div>`;
 
-    $('verify-results').innerHTML = dbgHtml + applyBtn + html2;
+    // Apply Fix — writes the per-frame Hung / XXXX corrections above
+    lastFix = wn ? { wn, editing: !!editingWeek, items: fixItems } : null;
+    let fixBtn = '';
+    if (wn && fixItems.length) {
+      fixBtn = canApply
+        ? `<button class="btn bp bw" style="margin-bottom:12px" onclick="applyFix()">Apply Fix (${fixItems.length})</button>`
+        : `<div class="sm" style="margin-bottom:12px">${fixItems.length} correction(s) found — open Week ${wn} from History → Edit to apply.</div>`;
+    }
+
+    $('verify-results').innerHTML = dbgHtml + applyBtn + fixBtn + html2;
     status.textContent = `✓ Verified ${games.length} games`;
   } catch(e) {
     status.textContent = `Error: ${e.message}`;
