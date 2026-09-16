@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v43</title>
+<title>Hee Hees v44</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -197,7 +197,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v43</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v44</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -279,7 +279,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
     </div>
     <div class="card mt12">
       <div class="ch">Bowler Starting Averages</div>
-      <div class="cb sm" style="padding-bottom:0">Weeks 1–3 use this number as-is. From Week 4 on it counts as 9 games and imported scores blend in on top for the running average — which can't drop more than 10 below this number.</div>
+      <div class="cb sm" style="padding-bottom:0">Weeks 1–3 use this number as-is. From Week 4 on the running average is pure actual scoring from imported games — which can't drop more than 10 below this number.</div>
       <div id="adm-bowlers" class="cb"></div>
     </div>
     <div class="card mt12">
@@ -715,12 +715,11 @@ function paidTotal(bid) {
 
 // ── Running average ─────────────────────────────────────────────────────────
 // Weeks 1..3 of a season use each bowler's flat starting average (b.avg).
-// From week RUNNING_AVG_FROM_WEEK on, Start Week pre-fills a blended "book +
-// actual" average: b.avg is credited as BOOK_GAMES games, every imported game
-// score adds on top — then clamped so it can never sit more than
-// AVG_FLOOR_DROP pins below b.avg. It can rise without limit.
+// From week RUNNING_AVG_FROM_WEEK on, Start Week pre-fills the bowler's pure
+// actual average (imported game scores only, no book blend) — clamped so it
+// never sits more than AVG_FLOOR_DROP pins below b.avg. It can rise without
+// limit. Before any games are imported it falls back to b.avg.
 // w.scores[bid] = [g1, g2, g3] is written from a verified score import.
-const BOOK_GAMES = 9;
 const AVG_FLOOR_DROP = 10;
 const RUNNING_AVG_FROM_WEEK = 4;
 
@@ -742,14 +741,14 @@ function actualAvg(bid, throughWn) {
   return g.length ? Math.floor(g.reduce((s, x) => s + x, 0) / g.length) : null;
 }
 
-// Blended book+actual through throughWn, floored at b.avg − AVG_FLOOR_DROP.
+// Pure actual average through throughWn, floored at b.avg − AVG_FLOOR_DROP.
+// Falls back to b.avg when no games have been imported yet.
 function runningAvg(bid, throughWn) {
   const b = gb(bid); if (!b) return 0;
   const book = +b.avg || 0;
-  const g = bowlerGameScores(bid, throughWn);
-  const pins = g.reduce((s, x) => s + x, 0);
-  const blended = Math.floor((book * BOOK_GAMES + pins) / (BOOK_GAMES + g.length));
-  return Math.max(blended, book - AVG_FLOOR_DROP);
+  const act = actualAvg(bid, throughWn);
+  if (act == null) return book;
+  return Math.max(act, book - AVG_FLOOR_DROP);
 }
 
 // The average to pre-fill when starting week `wn`: flat starting average for
@@ -1469,7 +1468,7 @@ $('swbtn').addEventListener('click', () => {
   $('sw-wn').textContent = next;
   $('sw-note').textContent = next < RUNNING_AVG_FROM_WEEK
     ? `Weeks 1–${RUNNING_AVG_FROM_WEEK - 1} use each bowler's starting average. Edit any before starting.`
-    : `Pre-filled from the running average through Week ${next - 1} (blended, never more than ${AVG_FLOOR_DROP} below the starting average). Edit any before starting.`;
+    : `Pre-filled from actual average through Week ${next - 1} (never more than ${AVG_FLOOR_DROP} below the starting average). Edit any before starting.`;
   $('sw-list').innerHTML = orderedBowlers().map(b =>
     `<div class="swrow">
       <span class="dot" style="background:${col(b)};width:12px;height:12px"></span>
