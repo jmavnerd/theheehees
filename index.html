@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v49</title>
+<title>Hee Hees v50</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
   color-scheme: light;   /* native controls (date picker, scrollbars) match the light UI */
   --bg: #F5F6FA; --surface: #FFFFFF; --surface2: #EEF0F5;
   --border: var(--pink); --border-subtle: #E3E5EC; --text: #1B1D23; --muted: #5B6472; --pink: #F472B6;
+  --game-a: #4b8ef8; --game-b: #3B82F6; --game-color: #3B82F6;   /* current game's color identity, set from JS */
   --fs: 1;   /* user text-size multiplier, set by the A-/A+ buttons — scales the whole UI */
   --tab-h: calc(clamp(56px, 8vw, 68px) * var(--fs));
   --hdr-h: calc(clamp(48px, 7vw, 62px) * var(--fs));
@@ -88,7 +89,8 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 #pane-live { padding: 0.5rem; }
 .game-sel { display: flex; gap: 0.4rem; margin: 0 -0.5rem 0.5rem; padding: 0.3rem 0.5rem; position: sticky; top: 0; z-index: 5; background: var(--bg); }
 .gbtn { flex: 1; padding: 0.45rem; border-radius: 8px; border: 1px solid var(--border); background: linear-gradient(180deg, #FFFFFF, #F0F1F6); color: var(--muted); font-weight: 600; font-size: 0.9rem; cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent; box-shadow: 0 1px 2px rgba(0,0,0,.05); transition: box-shadow .12s ease; }
-.gbtn.on { background: linear-gradient(180deg, #4b8ef8, #3B82F6); border-color: #3B82F6; color: #fff; box-shadow: 0 2px 9px -1px rgba(59,130,246,.5), inset 0 1px 0 rgba(255,255,255,.25); }
+.gbtn.on { background: linear-gradient(180deg, var(--game-a), var(--game-b)); border-color: var(--game-color); color: #fff; box-shadow: 0 2px 9px -1px color-mix(in srgb, var(--game-color) 55%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
+.game-band { background: var(--game-color); color: #fff; font-weight: 800; font-size: 0.78rem; letter-spacing: .08em; text-align: center; padding: 6px 0; border-radius: 8px; margin-bottom: 6px; }
 
 
 /* Live grid — 2 frame cells per row; each cell split into a column per bowler */
@@ -197,7 +199,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v49</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v50</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -472,6 +474,24 @@ const DEFAULTS = {
 // ── State ─────────────────────────────────────────────────────────────────────
 let S = JSON.parse(JSON.stringify(DEFAULTS));
 let curGame = 0;
+
+// Distinct per-game color identity, added after a real mix-up where it wasn't
+// obvious which game was being edited — the same color now threads through
+// the game selector, a banner over the frame grid, and the frame-edit modal
+// title, so which game you're in is visible no matter where you're looking.
+const GAME_COLORS = [
+  { a: '#4b8ef8', b: '#3B82F6', solid: '#3B82F6' },  // Game 1 — blue
+  { a: '#FB923C', b: '#F97316', solid: '#F97316' },  // Game 2 — orange
+  { a: '#A78BFA', b: '#8B5CF6', solid: '#8B5CF6' },  // Game 3 — violet
+];
+function applyGameColor() {
+  const g = GAME_COLORS[curGame];
+  const r = document.documentElement.style;
+  r.setProperty('--game-a', g.a);
+  r.setProperty('--game-b', g.b);
+  r.setProperty('--game-color', g.solid);
+}
+applyGameColor();
 let fmCtx = null;   // { gidx, fidx, bid }  — bid chosen in the modal, not held
 let fmInfs = new Set();
 let saveT = null;
@@ -1144,6 +1164,8 @@ function rLive() {
   };
 
   grid.innerHTML = '';
+  const band = document.createElement('div'); band.className = 'game-band'; band.textContent = `GAME ${curGame + 1}`;
+  grid.appendChild(band);
   const fg = document.createElement('div'); fg.className = 'fgrid';
   for (let f = 0; f < 10; f++) {
     const cell = document.createElement('div'); cell.className = 'fcell';
@@ -1455,6 +1477,7 @@ document.querySelectorAll('.gbtn').forEach(b => b.addEventListener('click', () =
   document.querySelectorAll('.gbtn').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');
   curGame = +b.dataset.g;
+  applyGameColor();
   rLive();
 }));
 
@@ -1542,7 +1565,7 @@ function openFrame(gidx, fidx, bid) {
   const w = gw(editingWeek || S.currentWeek); if (!w) return;
   if (w.closed && !editingWeek) return;
   fmCtx = { gidx, fidx, bid: null };
-  $('fm-title').textContent = `Game ${gidx + 1} · Frame ${fidx + 1}`;
+  $('fm-title').innerHTML = `<span style="background:${GAME_COLORS[gidx].solid};color:#fff;padding:2px 10px;border-radius:6px;margin-right:6px;display:inline-block">Game ${gidx + 1}</span>Frame ${fidx + 1}`;
   renderFmBowlers();
   if (bid) {
     fmPick(bid);   // tapped a specific bowler's column — jump straight to their toggles
