@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v48</title>
+<title>Hee Hees v49</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
   color-scheme: light;   /* native controls (date picker, scrollbars) match the light UI */
   --bg: #F5F6FA; --surface: #FFFFFF; --surface2: #EEF0F5;
-  --border: var(--pink); --text: #1B1D23; --muted: #5B6472; --pink: #F472B6;
+  --border: var(--pink); --border-subtle: #E3E5EC; --text: #1B1D23; --muted: #5B6472; --pink: #F472B6;
   --fs: 1;   /* user text-size multiplier, set by the A-/A+ buttons — scales the whole UI */
   --tab-h: calc(clamp(56px, 8vw, 68px) * var(--fs));
   --hdr-h: calc(clamp(48px, 7vw, 62px) * var(--fs));
@@ -74,7 +74,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .msec { font-size: 0.7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 1rem 0 0.5rem; }
 
 /* Infraction rows */
-.ir { display: flex; align-items: center; padding: 0.65rem 0; border-bottom: 1px solid var(--border); gap: 0.65rem; }
+.ir { display: flex; align-items: center; padding: 0.65rem 0; border-bottom: 1px solid var(--border-subtle); gap: 0.65rem; }
 .ir:last-child { border-bottom: none; }
 .irn { font-weight: 500; }
 .irf { font-size: 0.75rem; color: var(--muted); }
@@ -114,8 +114,8 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .fnum { position: absolute; top: 3px; left: 6px; z-index: 1; font-size: 0.82rem; font-weight: 700; color: var(--pink); }
 .fnames { display: flex; }
 .fnames > div { flex: 1; min-width: 0; text-align: center; font-size: 0.82rem; font-weight: 800; text-transform: uppercase; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.fcols { display: flex; flex: 1; margin-top: 3px; border-top: 1px solid var(--border); }
-.fcol { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 2px 2px; border-left: 1px solid var(--border); cursor: pointer; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+.fcols { display: flex; flex: 1; margin-top: 3px; border-top: 1px solid var(--border-subtle); }
+.fcol { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 2px 2px; border-left: 1px solid var(--border-subtle); cursor: pointer; overflow: hidden; -webkit-tap-highlight-color: transparent; }
 .fcol:first-of-type { border-left: none; }
 .fchip { display: inline-flex; align-items: center; font-size: 0.76rem; font-weight: 800; line-height: 1.3; letter-spacing: -.01em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; border-radius: 6px; background: rgba(255,255,255,.92); border: 1px solid rgba(0,0,0,.07); box-shadow: 0 1px 2px rgba(0,0,0,.10), inset 0 1px 0 rgba(255,255,255,.9); }
 .fchip.team { font-style: italic; text-decoration: underline; text-underline-offset: 2px; }
@@ -134,7 +134,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .btn:disabled { opacity: .4; pointer-events: none; }
 
 /* Start-week bowler row */
-.swrow { display: flex; align-items: center; padding: 0.7rem 0; border-bottom: 1px solid var(--border); gap: 0.65rem; }
+.swrow { display: flex; align-items: center; padding: 0.7rem 0; border-bottom: 1px solid var(--border-subtle); gap: 0.65rem; }
 .swrow:last-child { border-bottom: none; }
 .avginp { width: 4rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 0.3rem 0.4rem; color: var(--text); font-size: 0.9rem; text-align: center; }
 
@@ -148,7 +148,7 @@ input[type=url], input[type=text] { width: 100%; }
 textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 
 /* Night/history */
-.feerow { display: flex; align-items: center; padding: 0.7rem 0; border-bottom: 1px solid var(--border); gap: 0.5rem; }
+.feerow { display: flex; align-items: center; padding: 0.7rem 0; border-bottom: 1px solid var(--border-subtle); gap: 0.5rem; }
 .feerow:last-child { border-bottom: none; }
 .famount { font-size: 1.1rem; font-weight: 700; margin-left: auto; }
 
@@ -165,8 +165,8 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 
 /* Verify table */
 .vtbl { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-top: 0.5rem; }
-.vtbl th { text-align: left; padding: 0.3rem 0.45rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; }
-.vtbl td { padding: 0.3rem 0.45rem; border-bottom: 1px solid var(--border); }
+.vtbl th { text-align: left; padding: 0.3rem 0.45rem; border-bottom: 1px solid var(--border-subtle); color: var(--muted); font-weight: 600; }
+.vtbl td { padding: 0.3rem 0.45rem; border-bottom: 1px solid var(--border-subtle); }
 .ok  { color: #22c55e; }
 .bad { color: #ef4444; font-weight: 700; }
 .flg { color: #F59E0B; font-weight: 700; }
@@ -180,7 +180,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 .vfixflat { cursor: default; opacity: .8; }
 
 /* Admin */
-.arow { display: flex; align-items: center; padding: 0.65rem 0; border-bottom: 1px solid var(--border); gap: 0.5rem; }
+.arow { display: flex; align-items: center; padding: 0.65rem 0; border-bottom: 1px solid var(--border-subtle); gap: 0.5rem; }
 .arow:last-child { border-bottom: none; }
 .ainp { width: 4.5rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 0.3rem 0.4rem; color: var(--text); font-size: 0.9rem; text-align: center; }
 
@@ -197,7 +197,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v48</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v49</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -285,7 +285,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
     <div class="card mt12">
       <div class="ch">Infractions</div>
       <div id="adm-infs" class="cb"></div>
-      <div class="cb" style="border-top:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:center;gap:6px">
+      <div class="cb" style="border-top:1px solid var(--border-subtle);display:flex;flex-wrap:wrap;align-items:center;gap:6px">
         <input type="text" id="ni-name" placeholder="New infraction name" style="flex:1;min-width:120px" />
         <select id="ni-type" class="ainp" style="width:5.5rem;text-align:left">
           <option value="player">Player</option>
@@ -1118,7 +1118,7 @@ function rLive() {
       <div class="ch">Week ${wn} — complete <span class="sm" style="font-weight:400">${w.date || ''}</span></div>
       <div class="cb">
         ${rows}
-        <div style="padding:10px 0 2px;text-align:right;border-top:1px solid var(--border);font-weight:700">Total: ${$f(tot)}</div>
+        <div style="padding:10px 0 2px;text-align:right;border-top:1px solid var(--border-subtle);font-weight:700">Total: ${$f(tot)}</div>
         <div class="sm" style="margin-top:10px;text-align:center">
           Locked. <a href="#" onclick="goHistory(event)" style="color:#3B82F6;font-weight:600">View / edit in History</a>
         </div>
@@ -1151,7 +1151,7 @@ function rLive() {
     const cols = roster.map(b => {
       const c = col(b);
       const chips = (w.games?.[curGame]?.[b.id]?.frames?.[f] || []).map(iid => chipFor(iid, c)).join('');
-      return `<div class="fcol" style="background:${c}1f" onclick="openFrame(${curGame},${f},'${b.id}')">${chips}</div>`;
+      return `<div class="fcol" onclick="openFrame(${curGame},${f},'${b.id}')">${chips}</div>`;
     }).join('');
     cell.innerHTML = `<span class="fnum">${f + 1}</span><div class="fnames">${names}</div><div class="fcols">${cols}</div>`;
     fg.appendChild(cell);
@@ -1188,7 +1188,7 @@ function rNight() {
       ? `<div class="exsub" style="margin-top:0">${exLines(items)}</div>`
       : `<div class="exsub sm" style="margin-top:0">No charges.</div>`);
   });
-  html += `<div style="padding:12px 0 2px;text-align:right;border-top:1px solid var(--border);font-weight:700;font-size:16px">Total: ${$f(grand)}</div>`;
+  html += `<div style="padding:12px 0 2px;text-align:right;border-top:1px solid var(--border-subtle);font-weight:700;font-size:16px">Total: ${$f(grand)}</div>`;
   nsum.innerHTML = html;
 }
 
@@ -1221,7 +1221,7 @@ function rHistory() {
           <span>Payments</span>
           <button class="btn" style="background:var(--surface2);color:var(--text);font-size:0.72rem;padding:3px 9px" onclick="event.stopPropagation();askAddPayment('${b.id}')">+ Add payment</button>
         </div>${payRows}
-        <div class="exline" style="border-top:1px solid var(--border);margin-top:4px;padding-top:5px"><span>Charged</span><span>${$f(charged)}</span></div>
+        <div class="exline" style="border-top:1px solid var(--border-subtle);margin-top:4px;padding-top:5px"><span>Charged</span><span>${$f(charged)}</span></div>
         <div class="exline"><span>Paid</span><span>−${$f(paid)}</span></div>
         <div class="exline" style="font-weight:700"><span>Balance</span><span class="${balCls}">${balStr}</span></div>`;
 
