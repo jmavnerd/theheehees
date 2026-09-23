@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v54</title>
+<title>Hee Hees v56</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -106,8 +106,8 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .game-band { background: var(--game-color); color: #fff; font-weight: 800; font-size: 0.78rem; letter-spacing: .08em; text-align: center; padding: 6px 0; border-radius: 8px; margin-bottom: 6px; }
 
 
-/* Live grid — 2 frame cells per row; each cell split into a column per bowler */
-.fgrid { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; box-shadow: inset 0 2px 6px rgba(0,0,0,.06); }
+/* Live grid — 1 frame cell per row (all 10 stacked); each cell split into a column per bowler */
+.fgrid { display: grid; grid-template-columns: repeat(1,1fr); gap: 8px; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; box-shadow: inset 0 2px 6px rgba(0,0,0,.06); }
 .fcell {
   position: relative; display: flex; flex-direction: column;
   border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
@@ -212,7 +212,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v54</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v56</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -234,10 +234,6 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
       <span style="flex:1;font-weight:600;color:#F59E0B">✏️ Editing Week <span id="edit-wn-label"></span></span>
       <button class="btn" style="background:#F59E0B;color:#000;padding:6px 14px;font-size:0.85rem" onclick="doneEditing()">Done</button>
     </div>
-    <div id="bartab-banner" class="card" style="display:none;margin-bottom:10px">
-      <div class="ch" id="bartab-title">🍺 Bar Tab</div>
-      <div class="cb" id="bartab-chips" style="display:flex;flex-wrap:wrap;gap:8px"></div>
-    </div>
     <div class="game-sel">
       <div class="gbtn on" data-g="0">Game 1</div>
       <div class="gbtn" data-g="1">Game 2</div>
@@ -247,6 +243,10 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
     <div id="bgtot" class="gtot"></div>
     <div id="bgrid"></div>
     <button id="swbtn" class="btn bp bw" style="margin-top:22px">Start Week 1</button>
+    <div id="bartab-banner" class="card" style="display:none;margin-top:16px">
+      <div class="ch" id="bartab-title">🍺 Bar Tab</div>
+      <div class="cb" id="bartab-chips" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
   </div>
 
   <!-- VERIFY -->
@@ -459,7 +459,7 @@ const DEFAULTS = {
     { id:'gil',  name:'Gil Santiago',  initials:'GS', color:'#1D9E75', avg:180, core:true },
     { id:'tj',   name:'TJ Eberhardt', initials:'TJ', color:'#185FA5', avg:180, core:true },
     { id:'john', name:'John Merritt',  initials:'JM', color:'#D85A30', avg:180, core:true },
-    { id:'jeff', name:'Jeff Terito',   initials:'JT', color:'#534AB7', avg:180, core:true },
+    { id:'jeff', name:'Jeff Terito',   initials:'JT', color:'#B8860B', avg:180, core:true },
   ],
   infractions: [
     { id:'absent',          name:'Absent',           fee:10.00, type:'player' },
@@ -703,6 +703,15 @@ function migrateHangs() {
     });
   });
   return changed;
+}
+
+// One-time: TJ's blue and Jeff's purple were too close to tell apart at a
+// glance. Only touches it if it's still the old stale value — an intentional
+// re-pick by the user later won't get silently reverted.
+function migrateJeffColor() {
+  const b = gb('jeff');
+  if (b && b.color === '#534AB7') { b.color = '#B8860B'; return true; }
+  return false;
 }
 
 function infVisible(inf, bid) {
@@ -1235,8 +1244,8 @@ function rLive() {
     return;
   }
 
-  // 2-across frame cells; each cell split into a column per bowler (lineup order),
-  // with the bowler's first name atop each column.
+  // One frame cell per row (all 10 stacked); each cell split into a column
+  // per bowler (lineup order), with the bowler's first name atop each column.
   const roster = orderedBowlers(wn).filter(b => w.participating.includes(b.id) && !w.absent?.includes(b.id));
   $('bleg').innerHTML = '';   // names are in every cell now
 
@@ -1257,7 +1266,7 @@ function rLive() {
   const fg = document.createElement('div'); fg.className = 'fgrid';
   for (let f = 0; f < 10; f++) {
     const cell = document.createElement('div'); cell.className = 'fcell';
-    const names = roster.map(b => `<div style="color:${col(b)}">${b.initials || b.name.split(/\s+/).map(w => w[0]).join('').toUpperCase()}</div>`).join('');
+    const names = roster.map(b => `<div style="color:${col(b)}">${b.name.split(' ')[0]}</div>`).join('');
     const cols = roster.map(b => {
       const c = col(b);
       const chips = (w.games?.[curGame]?.[b.id]?.frames?.[f] || []).map(iid => chipFor(iid, c)).join('');
@@ -2290,7 +2299,10 @@ function resetSeason() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadState().then(() => {
-  if (migrateHangs()) { save(); render(); }
+  let migrated = false;
+  if (migrateHangs()) migrated = true;
+  if (migrateJeffColor()) migrated = true;
+  if (migrated) { save(); render(); }
   autoCloseStale();
   subscribe();
 });
