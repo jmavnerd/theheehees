@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v51</title>
+<title>Hee Hees v52</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -65,6 +65,12 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .tgl input:checked + .tgl-tr { background: #22c55e; }
 .tgl-th { position: absolute; width: clamp(18px,2.6vw,22px); height: clamp(18px,2.6vw,22px); background: #fff; border-radius: 50%; top: 3px; left: 3px; pointer-events: none; transition: transform .2s; }
 .tgl input:checked ~ .tgl-th { transform: translateX(clamp(16px,2.2vw,20px)); }
+
+/* Stepper (stackable infractions, e.g. XXXX) */
+.stp { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.stp-btn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 1.1rem; font-weight: 700; line-height: 1; cursor: pointer; }
+.stp-btn:active { background: var(--border-subtle); }
+.stp-n { min-width: 1.2em; text-align: center; font-weight: 700; font-size: 1rem; }
 
 /* Modal */
 .mbd { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100; align-items: flex-end; }
@@ -199,7 +205,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v51</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v52</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -493,7 +499,7 @@ function applyGameColor() {
 }
 applyGameColor();
 let fmCtx = null;   // { gidx, fidx, bid }  — bid chosen in the modal, not held
-let fmInfs = new Set();
+let fmInfs = [];   // multiset (array, dupes allowed) — mirrors a frame's marker array
 let saveT = null;
 let saving = false;
 let dirty = false;   // true when local has changes not yet confirmed saved to the backend
@@ -1582,23 +1588,51 @@ function fmPick(bid) {
   if (fmCtx.bid) persistFrame(fmCtx.bid);              // auto-save the tab we're leaving
   fmCtx.bid = bid;
   renderFmBowlers();
-  fmInfs = new Set(w.games?.[fmCtx.gidx]?.[bid]?.frames?.[fmCtx.fidx] || []);
+  fmInfs = [...(w.games?.[fmCtx.gidx]?.[bid]?.frames?.[fmCtx.fidx] || [])];
 
   const hungRow = `<div class="ir">
     <div style="flex:1"><div class="irn">🪝 Hung</div><div class="irf">counts toward the hanging scale</div></div>
-    <label class="tgl"><input type="checkbox" ${fmInfs.has('hung') ? 'checked' : ''} onchange="togInf('hung',this.checked)"><div class="tgl-tr"></div><div class="tgl-th"></div></label>
+    <label class="tgl"><input type="checkbox" ${fmInfs.includes('hung') ? 'checked' : ''} onchange="togInf('hung',this.checked)"><div class="tgl-tr"></div><div class="tgl-th"></div></label>
   </div>`;
-  const infRows = S.infractions.filter(i => infVisible(i, bid)).map(inf =>
-    `<div class="ir">
+  // XXXX can happen more than once in the same frame (a long strike run
+  // crossing into frame 10's bonus balls can cross the 4-strike threshold
+  // twice) — it gets a stepper instead of a checkbox. Everything else is
+  // still capped at one per frame.
+  const infRows = S.infractions.filter(i => infVisible(i, bid)).map(inf => {
+    const n = fmInfs.filter(x => x === inf.id).length;
+    const control = inf.id === 'xxxx'
+      ? `<div class="stp">
+          <button type="button" class="stp-btn" onclick="stepInf('${inf.id}',-1)">−</button>
+          <span class="stp-n" id="stp-${inf.id}">${n}</span>
+          <button type="button" class="stp-btn" onclick="stepInf('${inf.id}',1)">+</button>
+        </div>`
+      : `<label class="tgl"><input type="checkbox" ${n ? 'checked' : ''} onchange="togInf('${inf.id}',this.checked)"><div class="tgl-tr"></div><div class="tgl-th"></div></label>`;
+    return `<div class="ir">
       <div style="flex:1"><div class="irn">${inf.name}</div><div class="irf">${$f(inf.fee)} <span class="badge ${inf.type === 'team' ? 'bp2' : 'ba'}">${inf.type}</span></div></div>
-      <label class="tgl"><input type="checkbox" ${fmInfs.has(inf.id) ? 'checked' : ''} onchange="togInf('${inf.id}',this.checked)"><div class="tgl-tr"></div><div class="tgl-th"></div></label>
-    </div>`
-  ).join('');
+      ${control}
+    </div>`;
+  }).join('');
   $('fm-infs').innerHTML = hungRow + infRows;
   $('fm-save').disabled = false;
 }
 
-function togInf(id, on) { on ? fmInfs.add(id) : fmInfs.delete(id); }
+function togInf(id, on) {
+  fmInfs = fmInfs.filter(x => x !== id);   // one-per-frame infractions: clear first
+  if (on) fmInfs.push(id);
+}
+
+// Stackable infractions (XXXX): +1 pushes another instance, -1 pops the last one.
+function stepInf(id, delta) {
+  if (delta > 0) {
+    fmInfs.push(id);
+  } else {
+    const i = fmInfs.lastIndexOf(id);
+    if (i === -1) return;
+    fmInfs.splice(i, 1);
+  }
+  const el = $('stp-' + id);
+  if (el) el.textContent = fmInfs.filter(x => x === id).length;
+}
 
 // Write one bowler's current in-memory toggles (fmInfs) into their frame.
 // No modal close, no Live re-render — shared by Save and by a tab switch, so
@@ -1611,7 +1645,10 @@ function persistFrame(bid) {
   if (w.closed && !editingWeek) return false;
   const saved = w.games?.[gidx]?.[bid]?.frames?.[fidx] || [];
   const next = [...fmInfs];
-  const same = saved.length === next.length && saved.every(x => next.includes(x));
+  // Multiset-aware compare (XXXX can repeat) — sort before joining so order
+  // doesn't matter but counts do.
+  const norm = arr => [...arr].sort().join(',');
+  const same = norm(saved) === norm(next);
   if (same) return false;                              // nothing to write / push
   if (!w.games[gidx]) w.games[gidx] = {};
   if (!w.games[gidx][bid]) w.games[gidx][bid] = { frames: Array(10).fill(null).map(() => []) };
