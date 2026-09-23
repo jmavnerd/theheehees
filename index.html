@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v57</title>
+<title>Hee Hees v59</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -212,7 +212,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v57</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v59</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -235,8 +235,8 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
       <button class="btn" style="background:#F59E0B;color:#000;padding:6px 14px;font-size:0.85rem" onclick="doneEditing()">Done</button>
     </div>
     <div id="bartab-banner" class="card" style="display:none;margin-bottom:10px">
-      <div class="ch" id="bartab-title">🍺 Bar Tab</div>
-      <div class="cb" id="bartab-chips" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      <div class="ch" id="bartab-title" style="cursor:pointer" onclick="toggleBarTab()"></div>
+      <div class="cb" id="bartab-chips" style="display:none;flex-wrap:wrap;gap:8px"></div>
     </div>
     <div class="game-sel">
       <div class="gbtn on" data-g="0">Game 1</div>
@@ -570,6 +570,8 @@ function setBarTab(wn, bid) {
   save(); render();
 }
 
+function toggleBarTab() { bartabExpanded = !bartabExpanded; rLive(); }
+
 let fmCtx = null;   // { gidx, fidx, bid }  — bid chosen in the modal, not held
 let fmInfs = [];   // multiset (array, dupes allowed) — mirrors a frame's marker array
 let saveT = null;
@@ -645,6 +647,7 @@ function requireAdmin(cb) {
 // ── Edit mode ─────────────────────────────────────────────────────────────────
 let editingWeek = null;
 let histExpanded = new Set();   // History tab: expanded breakdown keys ('s:<bid>' / 'w:<wn>:<bid>')
+let bartabExpanded = false;     // Live tab (Game 3): collapsed to one line by default
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 const $  = id => document.getElementById(id);
@@ -1182,12 +1185,19 @@ function rLive() {
   }
 
   // Bar tab — who's up / who paid. Only surfaced on Game 3, so it doesn't
-  // compete for attention during Games 1–2.
+  // compete for attention during Games 1–2. Collapsed to one line by default
+  // so it doesn't push frame 1 below the fold — tap to expand the chip row.
   const btBanner = $('bartab-banner');
   if (w && curGame === 2) {
     btBanner.style.display = '';
-    $('bartab-title').textContent = `🍺 Bar Tab — Week ${wn}`;
-    $('bartab-chips').innerHTML = barTabChipsHtml(wn);
+    const paidB = w.barTab ? gb(w.barTab) : null;
+    const suggB = gb(barTabSuggested());
+    const summary = paidB
+      ? `🍺 ${paidB.name.split(' ')[0]} — Week ${wn} ✓`
+      : `🍺 ${suggB ? suggB.name.split(' ')[0] : '?'}'s turn · ${suggB ? barTabRemaining(suggB.id) : ''} left`;
+    $('bartab-title').innerHTML = `<span style="flex:1">${bartabExpanded ? `🍺 Bar Tab — Week ${wn}` : summary}</span><span class="excar">${bartabExpanded ? '▾' : '▸'}</span>`;
+    $('bartab-chips').style.display = bartabExpanded ? 'flex' : 'none';
+    if (bartabExpanded) $('bartab-chips').innerHTML = barTabChipsHtml(wn);
   } else {
     btBanner.style.display = 'none';
   }
@@ -1296,25 +1306,32 @@ function rNight() {
   const nsum = $('nsum'); const cwb = $('cwbtn');
   if (!w) { nsum.innerHTML = '<div class="sm">No active week.</div>'; cwb.style.display='none'; return; }
   cwb.style.display = w.closed ? 'none' : '';   // already closed — nothing to close
-  let html = ''; let grand = 0;
-  orderedBowlers(wn).forEach(b => {
+
+  // Totals are visible on every collapsed row up front (the "who owes what
+  // right now" question) — tap a name to drill into the itemized breakdown,
+  // same collapse pattern as History's Season Totals.
+  let grand = 0;
+  const rows = orderedBowlers(wn).map(b => {
     const fee = feesFor(b.id, wn); grand += fee;
+    const k = 'n:' + b.id, open = histExpanded.has(k);
     const items = feeBreakdown(b.id, wn);
-    html += `<div class="feerow" style="border-bottom:none;padding-bottom:2px">
+    const detail = open
+      ? (items.length ? `<div class="exsub" style="margin-top:0">${exLines(items)}</div>` : `<div class="exsub sm" style="margin-top:0">No charges.</div>`)
+      : '';
+    return `<div class="feerow exrow" onclick="toggleHist('${k}')">
       <span class="dot" style="background:${col(b)}"></span>
       <span style="flex:1;font-weight:700">${b.name}</span>
       <span class="famount">${$f(fee)}</span>
-    </div>` + (items.length
-      ? `<div class="exsub" style="margin-top:0">${exLines(items)}</div>`
-      : `<div class="exsub sm" style="margin-top:0">No charges.</div>`);
-  });
-  html += `<div style="padding:12px 0 2px;text-align:right;border-top:1px solid var(--border-subtle);font-weight:700;font-size:16px">Total: ${$f(grand)}</div>`;
-  nsum.innerHTML = html;
+      <span class="excar">${open ? '▾' : '▸'}</span>
+    </div>${detail}`;
+  }).join('');
+
+  nsum.innerHTML = rows + `<div style="padding:12px 0 2px;text-align:right;border-top:1px solid var(--border-subtle);font-weight:700;font-size:16px">Total: ${$f(grand)}</div>`;
 }
 
 function toggleHist(k) {
   histExpanded.has(k) ? histExpanded.delete(k) : histExpanded.add(k);
-  rHistory();
+  rHistory(); rNight();   // shared expand-state (History rows use 's:'/'w:' keys, Night uses 'n:')
 }
 
 function exLines(items) {
@@ -1424,7 +1441,7 @@ function rHistory() {
       <span class="famount" style="font-size:1rem">${$f(wkTotal)}</span>
       <span class="excar">${open ? '▾' : '▸'}</span>
       <button class="btn" style="background:var(--surface2);color:var(--text);font-size:0.82rem;padding:5px 9px;margin-left:8px" onclick="event.stopPropagation();editWeek(${wn})">✏️</button>
-      <button class="btn bd" style="font-size:0.82rem;padding:5px 9px;margin-left:5px" onclick="event.stopPropagation();deleteWeek(${wn})">🗑️</button>
+      <button style="background:none;border:none;color:var(--muted);font-size:0.7rem;padding:5px 4px;margin-left:12px;cursor:pointer;-webkit-tap-highlight-color:transparent" onclick="event.stopPropagation();deleteWeek(${wn})">🗑️</button>
     </div>${sub}`;
   }).join('') : '<div class="sm">No weeks logged.</div>';
 }
