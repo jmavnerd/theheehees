@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v53</title>
+<title>Hee Hees v54</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -212,7 +212,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v53</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v54</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -1321,6 +1321,14 @@ function rHistory() {
     const charged = tots[b.id], paid = paidTotal(b.id), bal = +(charged - paid).toFixed(2);
     const balStr = bal < -0.005 ? `${$f(-bal)} cr` : $f(bal);
     const balCls = bal < 0.005 ? 'ok' : '';   // settled or overpaid → green
+    // Running average — same number Start Week pre-fills from and w.avgs locks
+    // in, so this is "what their average actually is right now" at a glance.
+    const gCount = bowlerGameScores(b.id).length;
+    const ra = runningAvg(b.id), act = actualAvg(b.id);
+    const floored = gCount > 0 && act != null && ra !== act;
+    const avgLine = gCount
+      ? `Avg ${ra}${floored ? ` (floor, actual ${act})` : ''} · ${gCount} game${gCount === 1 ? '' : 's'}`
+      : 'No scores yet';
     let sub = '';
     if (open) {
       const pays = paymentsFor(b.id);
@@ -1353,7 +1361,7 @@ function rHistory() {
     }
     return `<div class="feerow exrow" onclick="toggleHist('${k}')">
       <span class="dot" style="background:${col(b)}"></span>
-      <span style="flex:1;font-weight:600">${b.name}<br><span class="sm" style="font-weight:400">${$f(charged)} charged · ${$f(paid)} paid</span></span>
+      <span style="flex:1;font-weight:600">${b.name}<br><span class="sm" style="font-weight:400">${$f(charged)} charged · ${$f(paid)} paid</span><br><span class="sm" style="font-weight:400">${avgLine}</span></span>
       <span class="famount ${balCls}">${balStr}</span>
       <span class="excar">${open ? '▾' : '▸'}</span>
     </div>${sub}`;
