@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v52</title>
+<title>Hee Hees v53</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -79,6 +79,13 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .mhd { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 1rem; }
 .mttl { font-size: 1rem; font-weight: 700; margin-bottom: 1rem; }
 .msec { font-size: 0.7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 1rem 0 0.5rem; }
+
+/* Bar tab chips */
+.bt-chip { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface2); font-size: 0.82rem; font-weight: 600; cursor: pointer; position: relative; }
+.bt-chip.sugg { border-color: #F59E0B; }
+.bt-chip.on { background: #22c55e; border-color: #22c55e; color: #fff; }
+.bt-chip.on .sm { color: rgba(255,255,255,.85); }
+.bt-tag { position: absolute; top: -9px; right: -8px; background: #F59E0B; font-size: 0.75rem; line-height: 1; padding: 3px; border-radius: 50%; width: 1.3em; height: 1.3em; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 
 /* Infraction rows */
 .ir { display: flex; align-items: center; padding: 0.65rem 0; border-bottom: 1px solid var(--border-subtle); gap: 0.65rem; }
@@ -205,7 +212,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v52</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v53</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -226,6 +233,10 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
     <div id="edit-banner" style="display:none;background:rgba(245,158,11,.15);border:1px solid #F59E0B;border-radius:8px;padding:8px 12px;margin-bottom:10px;display:none;align-items:center;gap:10px">
       <span style="flex:1;font-weight:600;color:#F59E0B">✏️ Editing Week <span id="edit-wn-label"></span></span>
       <button class="btn" style="background:#F59E0B;color:#000;padding:6px 14px;font-size:0.85rem" onclick="doneEditing()">Done</button>
+    </div>
+    <div id="bartab-banner" class="card" style="display:none;margin-bottom:10px">
+      <div class="ch" id="bartab-title">🍺 Bar Tab</div>
+      <div class="cb" id="bartab-chips" style="display:flex;flex-wrap:wrap;gap:8px"></div>
     </div>
     <div class="game-sel">
       <div class="gbtn on" data-g="0">Game 1</div>
@@ -267,6 +278,10 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
     <div class="card">
       <div class="ch">Season Totals</div>
       <div id="stots" class="cb"></div>
+    </div>
+    <div class="card mt12">
+      <div class="ch">Bar Tab</div>
+      <div id="bartab-hist" class="cb"></div>
     </div>
     <div class="card mt12">
       <div class="ch">Week Log</div>
@@ -498,6 +513,63 @@ function applyGameColor() {
   r.setProperty('--game-color', g.solid);
 }
 applyGameColor();
+
+// ── Bar Tab rotation ─────────────────────────────────────────────────────────
+// Fixed pick order (the group's actual lineup, not derived from anything else
+// in-app). "Whose turn" is only ever a suggestion, never enforced — the group
+// picks whoever's volunteered. Logging a payment for anyone just moves the
+// pointer to them, so an out-of-order volunteer doesn't break the cycle.
+const BAR_TAB_ORDER = ['gil', 'john', 'tj', 'jeff'];
+
+function barTabQuota() { return Math.round(36 / BAR_TAB_ORDER.length); }
+
+function barTabPaidWeeks(bid) {
+  return Object.keys(S.weeks).map(Number).filter(wn => S.weeks[wn].barTab === bid).sort((a, b) => a - b);
+}
+
+function barTabRemaining(bid) { return barTabQuota() - barTabPaidWeeks(bid).length; }
+
+// Walk the fixed rotation as a sequence of slots (gil#1, john#1, tj#1,
+// jeff#1, gil#2, ...) and suggest the first slot whose bowler hasn't paid
+// that many times yet. A skipped bowler's slot just sits unfulfilled — the
+// suggestion parks on them until they actually pay, however many weeks that
+// takes, rather than the whole rotation silently shifting past them. Whoever
+// covers in the meantime doesn't get asked again until their own next
+// unfulfilled slot comes up.
+function barTabSuggested() {
+  const paidCount = {};
+  BAR_TAB_ORDER.forEach(bid => { paidCount[bid] = barTabPaidWeeks(bid).length; });
+  const totalSlots = BAR_TAB_ORDER.length * barTabQuota();
+  for (let p = 0; p < totalSlots; p++) {
+    const bid = BAR_TAB_ORDER[p % BAR_TAB_ORDER.length];
+    const cycle = Math.floor(p / BAR_TAB_ORDER.length);
+    if (paidCount[bid] <= cycle) return bid;   // this slot isn't fulfilled yet
+  }
+  return BAR_TAB_ORDER[0];   // every slot fulfilled (or season overrun) — fall back
+}
+
+function barTabChipsHtml(wn) {
+  const w = gw(wn); if (!w) return '';
+  const suggested = barTabSuggested();
+  return BAR_TAB_ORDER.map(bid => {
+    const b = gb(bid); if (!b) return '';
+    const chosen = w.barTab === bid;
+    const isSuggested = !w.barTab && bid === suggested;
+    return `<div class="bt-chip${chosen ? ' on' : ''}${isSuggested ? ' sugg' : ''}" onclick="setBarTab(${wn},'${bid}')">
+      <span class="dot" style="background:${col(b)}"></span>${b.name.split(' ')[0]}
+      <span class="sm">${barTabRemaining(bid)} left</span>
+      ${isSuggested ? '<span class="bt-tag">🍺</span>' : ''}
+    </div>`;
+  }).join('');
+}
+
+// Tap the already-chosen bowler again to clear (correct a mistake).
+function setBarTab(wn, bid) {
+  const w = gw(wn); if (!w) return;
+  w.barTab = (w.barTab === bid) ? null : bid;
+  save(); render();
+}
+
 let fmCtx = null;   // { gidx, fidx, bid }  — bid chosen in the modal, not held
 let fmInfs = [];   // multiset (array, dupes allowed) — mirrors a frame's marker array
 let saveT = null;
@@ -1100,6 +1172,16 @@ function rLive() {
     banner.style.display = 'none';
   }
 
+  // Bar tab — who's up / who paid, for this same week
+  const btBanner = $('bartab-banner');
+  if (w) {
+    btBanner.style.display = '';
+    $('bartab-title').textContent = `🍺 Bar Tab — Week ${wn}`;
+    $('bartab-chips').innerHTML = barTabChipsHtml(wn);
+  } else {
+    btBanner.style.display = 'none';
+  }
+
   // Start-week button, at the bottom of the pane:
   //  - editing a past week / season finished / week still live → hidden
   //  - week closed (24h timeout OR manual Close Week — both      → button shown
@@ -1276,6 +1358,31 @@ function rHistory() {
       <span class="excar">${open ? '▾' : '▸'}</span>
     </div>${sub}`;
   }).join('') || '<div class="sm">No data.</div>';
+
+  // Bar Tab — remaining count per bowler, then a per-week log (tap to
+  // correct/assign, reusing the same chips as the Live tab banner).
+  const btWns = Object.keys(S.weeks).map(Number).sort((a, b) => a - b);
+  const btRem = BAR_TAB_ORDER.map(bid => {
+    const b = gb(bid); if (!b) return '';
+    const paid = barTabPaidWeeks(bid).length;
+    return `<div class="feerow">
+      <span class="dot" style="background:${col(b)}"></span>
+      <span style="flex:1;font-weight:600">${b.name}</span>
+      <span class="sm">${paid} of ${barTabQuota()} paid</span>
+      <span class="famount">${barTabRemaining(bid)} left</span>
+    </div>`;
+  }).join('');
+  const btLog = btWns.length ? btWns.map(wn => {
+    const w = S.weeks[wn];
+    const paidB = w.barTab ? gb(w.barTab) : null;
+    const k = `bt:${wn}`, open = histExpanded.has(k);
+    return `<div class="feerow exrow" onclick="toggleHist('${k}')">
+      <span style="flex:1;font-weight:600">Week ${wn}</span>
+      <span class="sm">${paidB ? paidB.name : '— not logged'}</span>
+      <span class="excar">${open ? '▾' : '▸'}</span>
+    </div>${open ? `<div class="exsub" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px 0">${barTabChipsHtml(wn)}</div>` : ''}`;
+  }).join('') : '<div class="sm">No weeks logged.</div>';
+  $('bartab-hist').innerHTML = `<div class="msec" style="margin-top:0">Remaining</div>${btRem}<div class="msec">Week Log</div>${btLog}`;
 
   // Week Log — one row per week, ascending; tap to expand the full breakdown.
   const wns = Object.keys(S.weeks).map(Number).sort((a,b)=>a-b);
@@ -1528,7 +1635,7 @@ function confirmSW() {
   const prev = S.currentWeek && gw(S.currentWeek);
   if (prev && !prev.closed) { prev.closed = true; prev.closedAt = Date.now(); }
 
-  S.weeks[next] = { date: new Date().toLocaleDateString('en-US'), startedAt: Date.now(), participating, absent, avgs, hangings:{}, games:[{},{},{}] };
+  S.weeks[next] = { date: new Date().toLocaleDateString('en-US'), startedAt: Date.now(), participating, absent, avgs, hangings:{}, games:[{},{},{}], barTab: null };
   S.currentWeek = next;
   closeM('m-sw'); save(); render();
 }
