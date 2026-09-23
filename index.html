@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v50</title>
+<title>Hee Hees v51</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -199,7 +199,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v50</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v51</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -1729,7 +1729,7 @@ function parseScoreSheet(html) {
 function calcVerifyHangings(games, participating) {
   const h = {}, where = {};
   participating.forEach(bid => { h[bid] = 0; where[bid] = []; });
-  let pendingAll4 = false;
+  let pendingAll4 = 0; // count of consecutive not-yet-resolved all-4 frames
 
   for (let g = 0; g < 3; g++) {
     for (let f = 0; f < 10; f++) {
@@ -1737,12 +1737,18 @@ function calcVerifyHangings(games, participating) {
       participating.forEach(bid => { b1s[bid] = (games[g]?.[bid]?.frames?.[f]?.[0] || '').trim(); });
       const strikers = new Set(participating.filter(bid => b1s[bid] === 'X'));
 
-      // Pending all-4 from previous frame
-      if (pendingAll4) {
+      // Resolve a pending all-4 chain once the streak actually breaks — every
+      // all-4 frame that passed unresolved (everyone kept striking) stacks
+      // onto whoever has this frame's lowest ball, all landing here at once.
+      if (pendingAll4 > 0 && strikers.size < 4) {
         let lowest = 11;
         participating.forEach(bid => { const v = ballVal(b1s[bid]); if (v < lowest) lowest = v; });
-        participating.forEach(bid => { if (ballVal(b1s[bid]) === lowest) { h[bid]++; where[bid].push({ g, f, reason: 'all4-low' }); } });
-        pendingAll4 = false;
+        participating.forEach(bid => {
+          if (ballVal(b1s[bid]) === lowest) {
+            for (let k = 0; k < pendingAll4; k++) { h[bid]++; where[bid].push({ g, f, reason: 'all4-low' }); }
+          }
+        });
+        pendingAll4 = 0;
       }
 
       // Solo non-striker
@@ -1751,11 +1757,9 @@ function calcVerifyHangings(games, participating) {
         if (ns) { h[ns]++; where[ns].push({ g, f, reason: 'solo' }); }
       }
 
-      // All-4 → set up next frame
+      // All-4 → extend (or start) the pending chain
       if (strikers.size === 4) {
-        if (f < 9) { pendingAll4 = true; }
-        else if (g < 2) { pendingAll4 = true; } // carry to next game
-        // Game 3 frame 10: skip
+        if (f < 9 || g < 2) pendingAll4++; // carries into next frame/game; Game 3 frame 10 has nowhere to carry to
       }
     }
   }
