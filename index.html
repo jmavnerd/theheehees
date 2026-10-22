@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v67</title>
+<title>Hee Hees v68</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -212,7 +212,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v67</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v68</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -386,7 +386,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
     <div class="mhd"></div>
     <div class="mttl">Who's subbing for <span id="sub-who"></span>?</div>
     <div id="sub-btns" style="margin-top:8px"></div>
-    <button class="btn bg bw" style="margin-top:6px" onclick="closeM('m-sub')">Cancel</button>
+    <button class="btn bg bw" style="margin-top:6px" onclick="cancelSub()">Cancel</button>
   </div>
 </div>
 
@@ -1393,8 +1393,9 @@ function toggleAbsent(bid) {
 }
 
 // Choose which roster sub is bowling for an absent bowler (buttons: a sub, or No sub).
-let subCtx = null;
-function pickSub(bid) {
+let subCtx = null, subQueue = [];
+function pickSub(bid, fromQueue) {
+  if (!fromQueue) subQueue = [];
   const w = gw(editingWeek || S.currentWeek); if (!w || !w.absent?.includes(bid)) return;
   const named = subRoster().filter(x => x.name);
   if (!named.length) { alert('Add your subs under Admin → Sub Roster first.'); return; }
@@ -1415,7 +1416,12 @@ function setSub(subId) {
   if (subId) w.subs[bid] = subId; else delete w.subs[bid];
   subCtx = null;
   save(); render();
+  // Start Week: walk through each bowler left off the roster in turn.
+  const nxt = subQueue.shift();
+  if (nxt) pickSub(nxt, true);
 }
+
+function cancelSub() { subQueue = []; closeM('m-sub'); }
 
 function abbr(name) {
   const map = {
@@ -1805,6 +1811,8 @@ function confirmSW() {
   S.weeks[next] = { date: new Date().toLocaleDateString('en-US'), startedAt: Date.now(), participating, absent, avgs, hangings:{}, games:[{},{},{}], barTab: null };
   S.currentWeek = next;
   closeM('m-sw'); save(); render();
+  // Left-off bowlers: ask who's subbing for each (skipped if no subs are on the roster).
+  if (absent.length && subRoster().some(x => x.name)) { subQueue = absent.slice(1); pickSub(absent[0], true); }
 }
 
 // ── Frame modal ───────────────────────────────────────────────────────────────
