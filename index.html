@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v65</title>
+<title>Hee Hees v66</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -212,7 +212,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v65</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v66</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -2341,7 +2341,7 @@ async function fetchAndVerify() {
     const avgs = w?.avgs || Object.fromEntries(S.bowlers.map(b => [b.id, b.avg]));
 
     const calcHRes = calcVerifyHangings(games, participating);
-    const calcXRes = calcVerifyXXXX(games, participating);
+    const calcXRes = calcVerifyXXXX(games, participating.filter(bid => !subbed.includes(bid)));   // XXXX isn't verified for a sub's frames
     const calcH = calcHRes.counts, calcX = calcXRes.counts;
 
     // Game totals per bowler
@@ -2387,7 +2387,7 @@ async function fetchAndVerify() {
     const diffFor = bid => {
       if (!w) return { h: [], x: [] };
       const hd = frameDiff(markerFrameMap(w, bid, 'hung'), whereCountMap(calcHRes.where[bid]), calcHRes.where[bid]);
-      const xd = frameDiff(markerFrameMap(w, bid, 'xxxx'), whereCountMap(calcXRes.where[bid]), calcXRes.where[bid]);
+      const xd = subbed.includes(bid) ? [] : frameDiff(markerFrameMap(w, bid, 'xxxx'), whereCountMap(calcXRes.where[bid]), calcXRes.where[bid]);
       hd.forEach(d => fixItems.push({ bid, g: d.g, f: d.f, marker: 'hung', delta: d.delta }));
       xd.forEach(d => fixItems.push({ bid, g: d.g, f: d.f, marker: 'xxxx', delta: d.delta }));
       return { h: hd, x: xd };
@@ -2421,11 +2421,11 @@ async function fetchAndVerify() {
             <span class="${lh===ch?'ok':'bad'}" style="font-size:1rem;font-weight:700">Logged ${lh} / Calc ${ch}</span>
           </div>
           ${fixRowsHtml(df.h, 'hung', bid, canApply)}
-          <div style="display:flex;gap:12px;align-items:center">
+          ${subbed.includes(bid) ? '' : `<div style="display:flex;gap:12px;align-items:center">
             <span style="flex:1;font-weight:600">✖️ XXXX</span>
             <span class="${lx===cx?'ok':'bad'}" style="font-size:1rem;font-weight:700">Logged ${lx} / Calc ${cx}</span>
           </div>
-          ${fixRowsHtml(df.x, 'xxxx', bid, canApply)}
+          ${fixRowsHtml(df.x, 'xxxx', bid, canApply)}`}
           ${fTags.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${fTags.join('')}</div>` : ''}
         </div>
       </div>`;
