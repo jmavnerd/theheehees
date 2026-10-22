@@ -3,7 +3,7 @@
 // Triggered by the Vercel cron in vercel.json; Vercel sends
 // "Authorization: Bearer $CRON_SECRET", and anything else is rejected.
 
-import { put } from '@vercel/blob';
+import { put, list } from '@vercel/blob';
 
 const SB_URL = process.env.SUPABASE_URL || 'https://cvecpzmeqtitvaltrmzh.supabase.co';
 const SB_KEY = process.env.SUPABASE_ANON_KEY ||
@@ -29,9 +29,14 @@ export default async function handler(req, res) {
       addRandomSuffix: false,
       contentType: 'application/json',
     });
+    // Visible in the Vercel log's Message column: which store got the file and how many are in it.
+    const stored = await list({ prefix: 'backups/' });
+    console.log(`backup saved: ${blob.pathname} | store ${process.env.BLOB_STORE_ID || '(unknown)'} | ${stored.blobs.length} backup file(s) in store`);
     return res.status(200).json({
       ok: true,
       path: blob.pathname,
+      store: process.env.BLOB_STORE_ID || null,
+      files: stored.blobs.length,
       weeks: Object.keys(rows[0].state.weeks).length,
       at: new Date().toISOString(),
     });
