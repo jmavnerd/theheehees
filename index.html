@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v64</title>
+<title>Hee Hees v65</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -212,7 +212,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v64</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v65</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -377,6 +377,16 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
     <div class="mttl" id="fm-title"></div>
     <div id="fm-bowlers" class="fbowlers"></div>
     <div id="fm-infs"></div>
+  </div>
+</div>
+
+<!-- SUB PICKER MODAL -->
+<div id="m-sub" class="mbd">
+  <div class="msh">
+    <div class="mhd"></div>
+    <div class="mttl">Who's subbing for <span id="sub-who"></span>?</div>
+    <div id="sub-btns" style="margin-top:8px"></div>
+    <button class="btn bg bw" style="margin-top:6px" onclick="closeM('m-sub')">Cancel</button>
   </div>
 </div>
 
@@ -1382,17 +1392,28 @@ function toggleAbsent(bid) {
   if (goingAbs) pickSub(bid);
 }
 
-// Choose which roster sub is bowling for an absent bowler (blank / Cancel = none).
+// Choose which roster sub is bowling for an absent bowler (buttons: a sub, or No sub).
+let subCtx = null;
 function pickSub(bid) {
   const w = gw(editingWeek || S.currentWeek); if (!w || !w.absent?.includes(bid)) return;
   const named = subRoster().filter(x => x.name);
   if (!named.length) { alert('Add your subs under Admin → Sub Roster first.'); return; }
+  subCtx = bid;
   const cur = subFor(w, bid);
-  const ans = prompt(`Who's subbing for ${gb(bid).name}?\n` + named.map((x, i) => `${i + 1} = ${x.name}`).join('\n') + `\n(blank = no sub)`, cur ? String(named.indexOf(named.find(x => x.id === cur.id)) + 1) : '');
-  if (ans === null) return;
-  const pick = named[parseInt(ans, 10) - 1];
+  $('sub-who').textContent = gb(bid).name;
+  $('sub-btns').innerHTML = named.map(x =>
+    `<button class="btn ${cur && cur.id === x.id ? 'bs' : 'bg'} bw" style="margin-bottom:8px" onclick="setSub('${x.id}')">${esc(x.name)}</button>`
+  ).join('') + `<button class="btn bg bw" onclick="setSub('')">No sub</button>`;
+  openM('m-sub');
+}
+
+function setSub(subId) {
+  const w = gw(editingWeek || S.currentWeek); const bid = subCtx;
+  closeM('m-sub');
+  if (!w || !bid || !w.absent?.includes(bid)) return;
   if (!w.subs) w.subs = {};
-  if (pick) w.subs[bid] = pick.id; else delete w.subs[bid];
+  if (subId) w.subs[bid] = subId; else delete w.subs[bid];
+  subCtx = null;
   save(); render();
 }
 
