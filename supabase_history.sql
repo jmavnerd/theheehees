@@ -1,5 +1,5 @@
 -- Run once in the Supabase dashboard -> SQL Editor.
--- Keeps every previous version of the state row, so an accidental or malicious
+-- Keeps periodic previous versions of the state row (one per 10 min, ~2000 of them), so an accidental or malicious
 -- overwrite can be rolled back: select state from hee_hees_state_history
 --   where id = 'hh12' order by saved_at desc limit 5;
 create table if not exists hee_hees_state_history (
@@ -11,13 +11,19 @@ create table if not exists hee_hees_state_history (
 
 create or replace function hee_hees_keep_history() returns trigger as $$
 begin
-  insert into hee_hees_state_history (id, state) values (old.id, old.state);
-  -- keep the most recent 500 versions per row
-  delete from hee_hees_state_history
-   where id = old.id
-     and n <= (select max(n) - 500 from hee_hees_state_history where id = old.id);
+  -- The app saves on every frame entered, so snapshot at most once per 10 minutes.
+  if not exists (
+    select 1 from hee_hees_state_history
+     where id = old.id and saved_at > now() - interval '10 minutes'
+  ) then
+    insert into hee_hees_state_history (id, state) values (old.id, old.state);
+    -- keep the most recent ~2000 snapshots per row (weeks of history)
+    delete from hee_hees_state_history
+     where id = old.id
+       and n <= (select max(n) - 2000 from hee_hees_state_history where id = old.id);
+  end if;
   return new;
-end $$ language plpgsql security definer;
+end $$ language plpgsql security definer set search_path = public;
 
 drop trigger if exists hee_hees_history on hee_hees_state;
 create trigger hee_hees_history before update on hee_hees_state
