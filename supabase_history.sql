@@ -25,3 +25,11 @@ create trigger hee_hees_history before update on hee_hees_state
 
 -- The history table must NOT be reachable with the public (anon) key:
 alter table hee_hees_state_history enable row level security;  -- no policies = no anon access
+-- Belt and braces (Supabase stops auto-granting new public tables on Oct 30 2026,
+-- but until then it still does): make sure the public key can never touch history.
+revoke all on hee_hees_state_history from anon, authenticated;
+revoke all on sequence hee_hees_state_history_n_seq from anon, authenticated;
+
+-- NOTE: only if hee_hees_state is ever recreated (new project / db reset), re-grant
+-- the app's access, since new tables no longer get it automatically:
+--   grant select, insert, update on public.hee_hees_state to anon;
