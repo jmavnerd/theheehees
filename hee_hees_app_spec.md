@@ -50,6 +50,14 @@ When tapping "Start Week":
 4. Each bowler's **weekly average** pre-fills from their Admin starting average but can be adjusted
 5. Absent bowlers are automatically charged the **Absent fee ($10)**
 6. Confirm → week starts with correct players and averages locked in
+7. (v68) For each bowler left off, a button sheet asks **who's subbing** (a name from the Sub Roster, or *No sub*). Skipped if the Sub Roster is empty; Cancel stops the sequence.
+
+### Absent bowlers & subs (v60–v68)
+- A deselected roster bowler is **not removed** from the Live tab. They keep a dimmed column and a frame-modal tab marked "(abs)".
+- On an absent bowler's frames only the **sub-chargeable** entries are offered: 🪝 Hung, Dropped Point, Swept (`SUB_CHARGEABLE`), and any team infraction. Other player infractions (Open, Gutter, Low Game, …) are hidden.
+- **Team infractions charge every other bowler whether present or absent** (a sub bowls as the absent bowler). The $10 Absent fee still comes only from the absent flag.
+- **Mid-week toggle:** a "Playing:" chip row on the Live tab flips any bowler between present and absent (injury etc.). Frames already entered are kept; a confirm explains the fee change. Marking a bowler absent opens the sub picker; an absent chip also gets a "+ sub" / "sub: Name" button.
+- **Sub Roster:** two spots in Admin; enter each sub's name as it appears on the score sheet. Assigned per week in `w.subs[absentBid] = subId`. Old saved state has no `S.subs` (defaults supplied by `subRoster()`).
 
 ---
 
@@ -108,7 +116,8 @@ A "hanging" is a special penalty tracked separately from frame infractions using
 
 ### Hanging Rules
 1. **Solo non-striker** — If exactly 3 bowlers throw a strike in a frame and 1 doesn't, the non-striker gets hung
-2. **All-4-strike rule** — If all 4 bowlers strike in the same frame, whoever throws the **lowest first ball in the next frame** gets hung
+2. **All-4-strike rule** — If all 4 bowlers strike in the same frame, whoever throws the **lowest first ball in the next frame** gets hung. Consecutive all-4 frames stack onto whoever is lowest when the streak breaks. **Ties (v67):** if bowlers tie for lowest first ball, only the tied bowlers carry to the next frame's first ball, repeating until one is the sole lowest, who takes all the stacked hangs. The carried hang stacks with that frame's own solo hang (a bowler can get 2 in one frame).
+2a. **With a sub:** the sub's score line stands in for the absent bowler, so there are still 4 bowlers
 3. **Double hung** — If both conditions apply to the same bowler in the same frame, they get hung **twice**
 4. **Cross-game carry** — If all 4 strike in Frame 10 of Game 1 or Game 2, the all-4 rule carries over to Frame 1 of the next game
 5. **Game 3 exception** — If all 4 strike in Frame 10 of Game 3, the all-4 rule is skipped
@@ -152,6 +161,14 @@ After bowling, the team receives a score URL via email (from syncpassport.com). 
 3. App recomputes hangings and XXXX from the sheet and shows, per bowler,
    `Logged X / Calc Y` (green when equal, red when not) plus flag chips
    (HIGH GAME / LOW GAME / UNDER 500 / SWEPT)
+
+### Subs in Verify (v64–v67)
+- An absent bowler **with a sub assigned** is verified using the sub's sheet row (matched by the Sub Roster name — case-insensitive; exact name or same last name + first initial). The row is read as the absent bowler's slot for **hangs**.
+- **XXXX is not verified for a sub's frames** (v66). Sub scores are **never saved** to Week scores/averages and get no HIGH/LOW/UNDER 500 flags (SWEPT can still show).
+- An absent bowler with **no** sub is skipped by Verify. Only bowlers who have a line in a game count for that game's hang rules (blank rows are ignored).
+
+### Editing game scores (v63)
+History → Week Log → **✏️ Edit game scores** (Admin PIN). Each bowler's G1/G2/G3 become editable boxes with an **Abs** button. An Abs game is stored as 0 and `w.skipGames[bid][g] = true`, so it stays **out of the average** and survives a later "Save these scores" from Verify. Abs affects averages only, never fees.
 
 ### Mismatch correction (v41)
 
@@ -220,11 +237,16 @@ VERIFY_SCORES|url={URL}|bowlers={Name}={id}:avg={avg},...|week={weekNumber}
   infractions: [
     { id, name, fee, type, onlyFor, excludeFor }
   ],
+  subs: [ { id: "sub1", name }, { id: "sub2", name } ],   // Sub Roster (Admin)
   currentWeek: null | weekNumber,
   weeks: {
     [weekNumber]: {
       date: "6/2/2026",
       participating: [bowlerIds],
+      absent: [bowlerIds],            // left off at Start Week (or toggled mid-week)
+      subs: { absentBowlerId: subId },// who's subbing (optional)
+      scores: { bowlerId: [g1,g2,g3] },
+      skipGames: { bowlerId: [bool,bool,bool] }, // "Abs" games excluded from averages
       avgs: { bowlerId: average },
       hangings: { bowlerId: count },
       games: [
@@ -265,7 +287,7 @@ Calculated separately using the cumulative scale. Total hanging fee for a bowler
 - **High game** — charged to other 3 ($10 each). Goes to the bowler who bowled the high game
 - **Win cards** — charged to other 3 ($1 each). Goes to the card game winner
 - **XXXX** — charged to other 3 ($0.25 each per instance)
-- **Absent** — auto-logged, charged to absent bowler only
+- **Absent** — charged to the absent bowler only. The absent bowler can also carry hangs, Dropped Point, Swept and (as a team charge to the others) team infractions entered on their frames.
 
 ---
 
@@ -301,6 +323,22 @@ At end of season:
 - +/- buttons for hanging count
 
 ---
+
+## Build Log
+
+### Oct 20–21, 2026 — Absent bowler + sub night (v60–v68)
+Triggered by a night where Gil was absent and a sub (Jacob AUsburn) bowled; the app had no way to log the absent bowler's fees, so a stand-in Low Game was used for the Absent fee.
+- **v60** Absent bowlers stay on the Live grid / frame modal.
+- **v61** Team infractions charge everyone, present or absent (`weekBowlerIds`); absent bowlers limited to sub-chargeable fees.
+- **v62** Live "Playing:" chips flip present/absent mid-week.
+- **v63** History game scores editable with sticky per-game Abs.
+- **v64** Sub Roster (Admin) + sub assignment; Verify reads the sub's sheet row for hangs; hang rules count only bowlers with a line each game.
+- **v65** Sub picker is a button sheet (was a typed prompt).
+- **v66** Verify skips XXXX for subs.
+- **v67** All-4 tie-for-lowest carries to the next frame's first ball.
+- **v68** Start Week asks for the sub of each bowler left off.
+- Verified against the real Week 8 score sheet (read-only): with Jacob as Gil's sub, every logged hang matched and Verify found one extra (TJ, G3 F10: carried all-4 hang + solo hang = 2). Week 8 was then corrected in the app.
+- Averages are unaffected by subs: only a bowler's own games count (`w.scores` > 0 and not Abs).
 
 ## Planned Features (not yet built)
 
