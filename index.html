@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v59</title>
+<title>Hee Hees v63</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -212,7 +212,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v59</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v63</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -717,6 +717,8 @@ function migrateJeffColor() {
   return false;
 }
 
+const SUB_CHARGEABLE = ['droppedpoint', 'swept'];   // player infractions a sub can rack up on the absent bowler's tab
+
 function infVisible(inf, bid) {
   if (inf.id === 'absent') return false;
   if (inf.id === 'over10pin') return false;   // auto-assessed at Week 36 in feesFor, never a manual toggle
@@ -735,6 +737,10 @@ function overTenDrop(bid) {
   return start != null && end != null && end <= start - 10;
 }
 
+// Everyone in the week's lineup, present or absent (a sub bowls as the absent
+// bowler, so their team infractions count against everyone).
+function weekBowlerIds(w) { return [...(w.participating || []), ...(w.absent || [])]; }
+
 function feesFor(bid, wn) {
   const w = gw(wn); if (!w) return 0;
   let t = 0;
@@ -749,7 +755,7 @@ function feesFor(bid, wn) {
       }
   }
   // team infractions from others
-  for (const oid of (w.participating || [])) {
+  for (const oid of weekBowlerIds(w)) {
     if (oid === bid) continue;
     for (let g = 0; g < 3; g++) {
       const og = w.games?.[g]?.[oid];
@@ -795,7 +801,7 @@ function gameFeeFor(bid, wn, g) {
   if (bg) for (let f = 0; f < 10; f++) for (const iid of (bg.frames?.[f] || [])) {
     const inf = gi(iid); if (inf?.type === 'player') t += inf.fee;
   }
-  for (const oid of (w.participating || [])) {
+  for (const oid of weekBowlerIds(w)) {
     if (oid === bid) continue;
     const og = w.games?.[g]?.[oid];
     if (og) for (let f = 0; f < 10; f++) for (const iid of (og.frames?.[f] || [])) {
@@ -869,12 +875,61 @@ function prefillAvg(bid, wn) {
   return runningAvg(bid, wn - 1);
 }
 
+// ── History: editable game scores (Admin-PIN gated) ──────────────────────────
+// w.scores[bid] = [g1,g2,g3]; a game only feeds averages when > 0. Marking a
+// game "Abs" (w.skipGames[bid][g]) forces it to 0 and keeps it out of the
+// average even if Verify re-saves the sheet (e.g. a sub bowled it).
+let scoreEditWn = null;
+
+function askEditScores(wn) { requireAdmin(() => { scoreEditWn = wn; rHistory(); }); }
+function doneEditScores() { scoreEditWn = null; rHistory(); }
+
+function ensureScores(w, bid) {
+  if (!w.scores) w.scores = {};
+  if (!Array.isArray(w.scores[bid])) w.scores[bid] = [0, 0, 0];
+  if (!w.skipGames) w.skipGames = {};
+  if (!Array.isArray(w.skipGames[bid])) w.skipGames[bid] = [false, false, false];
+}
+
+function setGameScore(wn, bid, g, val) {
+  const w = gw(wn); if (!w || scoreEditWn !== wn) return;
+  ensureScores(w, bid);
+  const n = Math.max(0, Math.min(300, parseInt(val, 10) || 0));
+  w.scores[bid][g] = n;
+  if (n > 0) w.skipGames[bid][g] = false;   // typing a real score un-skips the game
+  save(); render();
+}
+
+function toggleSkipGame(wn, bid, g) {
+  const w = gw(wn); if (!w || scoreEditWn !== wn) return;
+  ensureScores(w, bid);
+  const skip = !w.skipGames[bid][g];
+  w.skipGames[bid][g] = skip;
+  if (skip) w.scores[bid][g] = 0;
+  save(); render();
+}
+
+function scoreEditorHtml(wn, bid) {
+  const w = gw(wn); const sc = w?.scores?.[bid] || [0, 0, 0], sk = w?.skipGames?.[bid] || [];
+  const cells = [0, 1, 2].map(g => {
+    const skipped = !!sk[g];
+    return `<span style="display:inline-flex;flex-direction:column;align-items:center;gap:3px">
+      <input type="number" inputmode="numeric" min="0" max="300" ${skipped ? 'disabled' : ''} value="${+sc[g] > 0 ? +sc[g] : ''}" placeholder="G${g + 1}"
+        onchange="setGameScore(${wn},'${bid}',${g},this.value)" style="width:56px;text-align:center;padding:4px 2px">
+      <button type="button" onclick="toggleSkipGame(${wn},'${bid}',${g})"
+        style="font-size:0.66rem;padding:2px 8px;border-radius:6px;border:1px solid var(--border-subtle);cursor:pointer;${skipped ? 'background:#F97316;color:#fff;border-color:#F97316' : 'background:var(--surface2);color:var(--muted)'}">Abs</button>
+    </span>`;
+  }).join('');
+  return `<div class="exline"><span>Games</span><span style="display:flex;gap:8px">${cells}</span></div>`;
+}
+
 // One "G1 · G2 · G3 = total" line for a bowler in a week, or '' if no scores.
 function scoreLine(wn, bid) {
   const s = gw(wn)?.scores?.[bid];
   if (!Array.isArray(s)) return '';
   const tot = s.reduce((a, c) => a + (+c || 0), 0);
-  return `<div class="exline sm"><span>Games</span><span>${s.map(x => +x || '—').join(' · ')} = ${tot}</span></div>`;
+  const sk = gw(wn)?.skipGames?.[bid] || [];
+  return `<div class="exline sm"><span>Games</span><span>${s.map((x, g) => sk[g] ? 'Abs' : (+x || '—')).join(' · ')} = ${tot}</span></div>`;
 }
 
 // Itemized charges for one bowler in one week. Σ of .amount === feesFor(bid, wn).
@@ -897,7 +952,7 @@ function feeBreakdown(bid, wn) {
     items.push({ label: q > 1 ? `${inf.name} ×${q}` : inf.name, amount: +(q * inf.fee).toFixed(2) });
   });
 
-  for (const oid of (w.participating || [])) {
+  for (const oid of weekBowlerIds(w)) {
     if (oid === bid) continue;
     const from = {};
     for (let g = 0; g < 3; g++) {
@@ -932,7 +987,7 @@ function seasonBreakdown(bid) {
     if (amt) perWeek.push({ wn, amount: +amt.toFixed(2) });
     if (w.absent?.includes(bid)) absences++;
     for (let g = 0; g < 3; g++) { const bg = w.games?.[g]?.[bid]; if (bg) for (let f = 0; f < 10; f++) for (const iid of (bg.frames?.[f] || [])) { const inf = gi(iid); if (inf?.type === 'player') own[iid] = (own[iid] || 0) + 1; } }
-    for (const oid of (w.participating || [])) { if (oid === bid) continue; for (let g = 0; g < 3; g++) { const og = w.games?.[g]?.[oid]; if (og) for (let f = 0; f < 10; f++) for (const iid of (og.frames?.[f] || [])) { const inf = gi(iid); if (inf?.type === 'team') team[iid] = (team[iid] || 0) + 1; } } }
+    for (const oid of weekBowlerIds(w)) { if (oid === bid) continue; for (let g = 0; g < 3; g++) { const og = w.games?.[g]?.[oid]; if (og) for (let f = 0; f < 10; f++) for (const iid of (og.frames?.[f] || [])) { const inf = gi(iid); if (inf?.type === 'team') team[iid] = (team[iid] || 0) + 1; } } }
     const hc = w.hangings?.[bid] || 0;
     if (hc) { hangCount += hc; hangFee += hangVal(hc); }   // hang fee is per-week, not cumulative across the season
     if (wn === 36 && overTenDrop(bid)) over10++;
@@ -1257,8 +1312,15 @@ function rLive() {
 
   // One frame cell per row (all 10 stacked); each cell split into a column
   // per bowler (lineup order), with the bowler's first name atop each column.
-  const roster = orderedBowlers(wn).filter(b => w.participating.includes(b.id) && !w.absent?.includes(b.id));
-  $('bleg').innerHTML = '';   // names are in every cell now
+  // Absent bowlers stay on the grid: they can still pick up fees beyond the Absent fee.
+  const roster = orderedBowlers(wn).filter(b => w.participating.includes(b.id) || w.absent?.includes(b.id));
+  // Attendance chips: tap to flip a bowler present <-> absent mid-week
+  // (injury, early leave...). Their frames stay; only the Absent fee/filters change.
+  $('bleg').innerHTML = '<span style="color:var(--muted)">Playing:</span>' + orderedBowlers(wn)
+    .filter(b => w.participating.includes(b.id) || w.absent?.includes(b.id)).map(b => {
+      const abs = w.absent?.includes(b.id);
+      return `<button type="button" onclick="toggleAbsent('${b.id}')" style="border:1px solid ${col(b)};background:${abs ? 'transparent' : col(b) + '22'};color:${col(b)};border-radius:999px;padding:4px 10px;font:inherit;${abs ? 'opacity:.55;text-decoration:line-through' : ''}">${b.name.split(' ')[0]}${abs ? ' · abs' : ''}</button>`;
+    }).join('');
 
   // per-bowler running fee total for the game currently being viewed
   $('bgtot').innerHTML = roster.map(b =>
@@ -1277,7 +1339,7 @@ function rLive() {
   const fg = document.createElement('div'); fg.className = 'fgrid';
   for (let f = 0; f < 10; f++) {
     const cell = document.createElement('div'); cell.className = 'fcell';
-    const names = roster.map(b => `<div style="color:${col(b)}">${b.name.split(' ')[0]}</div>`).join('');
+    const names = roster.map(b => `<div style="color:${col(b)}${w.absent?.includes(b.id) ? ';opacity:.55;font-style:italic' : ''}">${b.name.split(' ')[0]}</div>`).join('');
     const cols = roster.map(b => {
       const c = col(b);
       const chips = (w.games?.[curGame]?.[b.id]?.frames?.[f] || []).map(iid => chipFor(iid, c)).join('');
@@ -1287,6 +1349,22 @@ function rLive() {
     fg.appendChild(cell);
   }
   grid.appendChild(fg);
+}
+
+// Flip a bowler between present and absent for the week being viewed.
+function toggleAbsent(bid) {
+  const wn = editingWeek || S.currentWeek, w = gw(wn);
+  if (!w || (w.closed && !editingWeek)) return;
+  const b = gb(bid); if (!b) return;
+  const goingAbs = !w.absent?.includes(bid);
+  const fee = gi('absent')?.fee ?? 0;
+  if (!confirm(goingAbs
+    ? `Mark ${b.name} absent? They'll be charged the ${$f(fee)} Absent fee, and only sub-chargeable fees can be added to them.`
+    : `Mark ${b.name} present? The ${$f(fee)} Absent fee comes off.`)) return;
+  w.participating = (w.participating || []).filter(x => x !== bid);
+  w.absent = (w.absent || []).filter(x => x !== bid);
+  (goingAbs ? w.absent : w.participating).push(bid);
+  save(); render();
 }
 
 function abbr(name) {
@@ -1433,8 +1511,8 @@ function rHistory() {
         const rows = items.length ? exLines(items) : `<div class="exline sm"><span>No charges</span><span></span></div>`;
         return `<div class="exhdr" style="display:flex;justify-content:space-between;font-size:0.74rem">
             <span style="color:${col(b)}">${b.name}</span><span style="color:var(--text)">${$f(feesFor(b.id,wn))}</span>
-          </div><div class="exsub2">${scoreLine(wn, b.id)}${rows}</div>`;
-      }).join('') + `</div>`;
+          </div><div class="exsub2">${scoreEditWn === wn ? scoreEditorHtml(wn, b.id) : scoreLine(wn, b.id)}${rows}</div>`;
+      }).join('') + `<div style="text-align:right;padding-top:8px"><button class="btn" style="background:var(--surface2);color:var(--text);font-size:0.8rem;padding:5px 10px" onclick="${scoreEditWn === wn ? 'doneEditScores()' : `askEditScores(${wn})`}">${scoreEditWn === wn ? 'Done editing scores' : '✏️ Edit game scores'}</button></div></div>`;
     }
     return `<div class="feerow exrow" onclick="toggleHist('${k}')">
       <div style="flex:1"><span style="font-weight:700">Week ${wn}</span> <span class="sm">${w.date||''}</span></div>
@@ -1692,7 +1770,7 @@ function hungCountW(bid, w) {
 function fmRoster() {
   const w = gw(editingWeek || S.currentWeek);
   return w ? orderedBowlers(editingWeek || S.currentWeek)
-    .filter(b => w.participating.includes(b.id) && !w.absent?.includes(b.id)) : [];
+    .filter(b => w.participating.includes(b.id) || w.absent?.includes(b.id)) : [];
 }
 
 // The bowler tab strip — always visible in the modal; the selected one is filled.
@@ -1704,7 +1782,7 @@ function renderFmBowlers() {
     const tags = cur.map(iid => iid === 'hung' ? '🪝' : (gi(iid) ? abbr(gi(iid).name) : '')).filter(Boolean).join(' ');
     const on = fmCtx.bid === b.id;
     return `<button class="fbtab" style="border-color:${c}${on ? `;background:${c}2b;color:${c};box-shadow:inset 0 0 0 1.5px ${c}` : ''}"
-      onclick="fmPick('${b.id}')">${b.name.split(' ')[0]}<span class="mk" style="color:${c}">${tags}</span></button>`;
+      onclick="fmPick('${b.id}')">${b.name.split(' ')[0]}${w.absent?.includes(b.id) ? ' <span class="sm">(abs)</span>' : ''}<span class="mk" style="color:${c}">${tags}</span></button>`;
   }).join('');
 }
 
@@ -1740,7 +1818,10 @@ function fmPick(bid) {
   // crossing into frame 10's bonus balls can cross the 4-strike threshold
   // twice) — it gets a stepper instead of a checkbox. Everything else is
   // still capped at one per frame.
-  const infRows = S.infractions.filter(i => infVisible(i, bid)).map(inf => {
+  // An absent bowler's frames are a sub's: only the sub mistakes that get
+  // charged back to the absent bowler (hangs, Dropped Point, Swept, any team infraction).
+  const isSub = !!w.absent?.includes(bid);
+  const infRows = S.infractions.filter(i => infVisible(i, bid) && (!isSub || i.type === 'team' || SUB_CHARGEABLE.includes(i.id))).map(inf => {
     const n = fmInfs.filter(x => x === inf.id).length;
     const control = inf.id === 'xxxx'
       ? `<div class="stp">
@@ -1993,6 +2074,11 @@ function applyLastVerify() {
   if (!w) { alert('That week no longer exists.'); return; }
   if (!verifyWritable(v.wn, w)) { alert(`Week ${v.wn} is closed. Open it from History → Edit first.`); return; }
   w.scores = Object.assign({}, w.scores, v.scores);
+  // Games marked Abs in History stay out of the average even when re-imported.
+  Object.keys(w.skipGames || {}).forEach(bid => {
+    if (!Array.isArray(w.scores[bid])) return;
+    w.skipGames[bid].forEach((sk, g) => { if (sk) w.scores[bid][g] = 0; });
+  });
   save(); render();
   const st = $('verify-status');
   if (st) st.textContent = `✓ Saved scores for ${Object.keys(v.scores).length} bowlers to Week ${v.wn}`;
