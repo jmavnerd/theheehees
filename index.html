@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v66</title>
+<title>Hee Hees v67</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -212,7 +212,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v66</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v67</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -2059,6 +2059,7 @@ function calcVerifyHangings(games, participating) {
   const h = {}, where = {};
   participating.forEach(bid => { h[bid] = 0; where[bid] = []; });
   let pendingAll4 = 0; // count of consecutive not-yet-resolved all-4 frames
+  let tied = null;     // bowlers still tied for lowest ball on a carried all-4 debt (null = everyone)
 
   for (let g = 0; g < 3; g++) {
     for (let f = 0; f < 10; f++) {
@@ -2075,15 +2076,21 @@ function calcVerifyHangings(games, participating) {
       // Resolve a pending all-4 chain once the streak actually breaks — every
       // all-4 frame that passed unresolved (everyone kept striking) stacks
       // onto whoever has this frame's lowest ball, all landing here at once.
+      // Ties for lowest first ball carry: only the tied bowlers stay in the
+      // running into the next frame's first ball, until one is the sole lowest.
       if (pendingAll4 > 0 && strikers.size < n) {
+        let pool = tied ? act.filter(bid => tied.has(bid)) : act;
+        if (!pool.length) pool = act;
         let lowest = 11;
-        act.forEach(bid => { const v = ballVal(b1s[bid]); if (v < lowest) lowest = v; });
-        act.forEach(bid => {
-          if (ballVal(b1s[bid]) === lowest) {
-            for (let k = 0; k < pendingAll4; k++) { h[bid]++; where[bid].push({ g, f, reason: 'all4-low' }); }
-          }
-        });
-        pendingAll4 = 0;
+        pool.forEach(bid => { const v = ballVal(b1s[bid]); if (v < lowest) lowest = v; });
+        const lows = pool.filter(bid => ballVal(b1s[bid]) === lowest);
+        if (lows.length === 1) {
+          const bid = lows[0];
+          for (let k = 0; k < pendingAll4; k++) { h[bid]++; where[bid].push({ g, f, reason: 'all4-low' }); }
+          pendingAll4 = 0; tied = null;
+        } else {
+          tied = new Set(lows);   // still tied — debt stays pending, carries on
+        }
       }
 
       // Solo non-striker
