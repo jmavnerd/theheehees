@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hee Hees v63</title>
+<title>Hee Hees v64</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -212,7 +212,7 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
 <body>
 
 <div id="hdr">
-  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v63</span></h1>
+  <h1>🎳 Hee Hees <span style="font-size:0.6rem;color:var(--muted)">v64</span></h1>
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px">
     <button class="fsbtn" onclick="setFS(-1)" aria-label="Smaller text">A<span class="sub">−</span></button>
     <button class="fsbtn" onclick="setFS(1)" aria-label="Larger text">A<span class="sub">+</span></button>
@@ -304,6 +304,11 @@ textarea:focus, input:focus { outline: none; border-color: #3B82F6; }
       <div class="ch">Bowler Starting Averages</div>
       <div class="cb sm" style="padding-bottom:0">Weeks 1–3 use this number as-is. From Week 4 on the running average is pure actual scoring from imported games — which can't drop more than 10 below this number.</div>
       <div id="adm-bowlers" class="cb"></div>
+    </div>
+    <div class="card mt12">
+      <div class="ch">Sub Roster</div>
+      <div class="cb sm" style="padding-bottom:0">Enter each sub's name as it appears on the score sheet. When a bowler is marked absent you pick who's subbing; Verify then reads the sub's frames for hangs/XXXX. Sub scores never count toward averages.</div>
+      <div id="adm-subs" class="cb"></div>
     </div>
     <div class="card mt12">
       <div class="ch">Infractions</div>
@@ -486,6 +491,7 @@ const DEFAULTS = {
     { id:'over10pin',       name:'Over 10 Pin Drop', fee:25.00, type:'player' },
     { id:'wincards',        name:'Win Cards',        fee: 1.00, type:'team'   },
   ],
+  subs: [{ id:'sub1', name:'' }, { id:'sub2', name:'' }],   // sub roster: name as it appears on the score sheet
   weeks: {},
   // Money paid toward the season balance. Not tied to a week — a running credit.
   // { id, bid, amount, date:'YYYY-MM-DD', note }
@@ -739,6 +745,12 @@ function overTenDrop(bid) {
 
 // Everyone in the week's lineup, present or absent (a sub bowls as the absent
 // bowler, so their team infractions count against everyone).
+// Sub roster (2 spots, edited in Admin). Old saved state has no S.subs.
+function subRoster() { return (S.subs && S.subs.length) ? S.subs : [{ id:'sub1', name:'' }, { id:'sub2', name:'' }]; }
+const gsub = id => subRoster().find(x => x.id === id);
+// Who's subbing for absent bowler `bid` this week -> sub object (with a name) or null.
+function subFor(w, bid) { const x = gsub(w?.subs?.[bid]); return x && x.name ? x : null; }
+
 function weekBowlerIds(w) { return [...(w.participating || []), ...(w.absent || [])]; }
 
 function feesFor(bid, wn) {
@@ -1319,7 +1331,8 @@ function rLive() {
   $('bleg').innerHTML = '<span style="color:var(--muted)">Playing:</span>' + orderedBowlers(wn)
     .filter(b => w.participating.includes(b.id) || w.absent?.includes(b.id)).map(b => {
       const abs = w.absent?.includes(b.id);
-      return `<button type="button" onclick="toggleAbsent('${b.id}')" style="border:1px solid ${col(b)};background:${abs ? 'transparent' : col(b) + '22'};color:${col(b)};border-radius:999px;padding:4px 10px;font:inherit;${abs ? 'opacity:.55;text-decoration:line-through' : ''}">${b.name.split(' ')[0]}${abs ? ' · abs' : ''}</button>`;
+      const sb = abs ? subFor(w, b.id) : null;
+      return `<button type="button" onclick="toggleAbsent('${b.id}')" style="border:1px solid ${col(b)};background:${abs ? 'transparent' : col(b) + '22'};color:${col(b)};border-radius:999px;padding:4px 10px;font:inherit;${abs ? 'opacity:.55;text-decoration:line-through' : ''}">${b.name.split(' ')[0]}${abs ? ' · abs' : ''}</button>${abs ? `<button type="button" onclick="pickSub('${b.id}')" title="Who's subbing" style="border:1px dashed var(--muted);background:transparent;color:var(--muted);border-radius:999px;padding:4px 8px;font:inherit;margin-left:-4px">${sb ? 'sub: ' + sb.name.split(' ')[0] : '+ sub'}</button>` : ''}`;
     }).join('');
 
   // per-bowler running fee total for the game currently being viewed
@@ -1364,6 +1377,22 @@ function toggleAbsent(bid) {
   w.participating = (w.participating || []).filter(x => x !== bid);
   w.absent = (w.absent || []).filter(x => x !== bid);
   (goingAbs ? w.absent : w.participating).push(bid);
+  if (!goingAbs && w.subs) delete w.subs[bid];
+  save(); render();
+  if (goingAbs) pickSub(bid);
+}
+
+// Choose which roster sub is bowling for an absent bowler (blank / Cancel = none).
+function pickSub(bid) {
+  const w = gw(editingWeek || S.currentWeek); if (!w || !w.absent?.includes(bid)) return;
+  const named = subRoster().filter(x => x.name);
+  if (!named.length) { alert('Add your subs under Admin → Sub Roster first.'); return; }
+  const cur = subFor(w, bid);
+  const ans = prompt(`Who's subbing for ${gb(bid).name}?\n` + named.map((x, i) => `${i + 1} = ${x.name}`).join('\n') + `\n(blank = no sub)`, cur ? String(named.indexOf(named.find(x => x.id === cur.id)) + 1) : '');
+  if (ans === null) return;
+  const pick = named[parseInt(ans, 10) - 1];
+  if (!w.subs) w.subs = {};
+  if (pick) w.subs[bid] = pick.id; else delete w.subs[bid];
   save(); render();
 }
 
@@ -1576,6 +1605,10 @@ function rAdmin() {
       <input class="ainp" data-bid="${b.id}" type="number" value="${b.avg}" min="0" max="300"/>
     </div>`;
   }).join('');
+  $('adm-subs').innerHTML = subRoster().map((x, i) =>
+    `<div class="arow"><span style="width:3.2rem">Sub ${i + 1}</span>
+      <input class="ainp" data-sub-id="${x.id}" type="text" value="${(x.name || '').replace(/"/g,'&quot;')}" placeholder="Name on score sheet" style="flex:1;width:auto;min-width:0;text-align:left" /></div>`
+  ).join('');
   $('adm-infs').innerHTML = S.infractions.map(inf =>
     `<div class="arow">
       <input class="ainp" data-name-iid="${inf.id}" type="text" value="${inf.name.replace(/"/g,'&quot;')}" style="flex:1;width:auto;min-width:0;text-align:left" />
@@ -1932,7 +1965,17 @@ function matchBowler(scoreName) {
   return { bowler: null, rank: 9 };
 }
 
-function parseScoreSheet(html) {
+// subMap: [{ name, bid }] — a sub's sheet row is read as the absent bowler's slot.
+function matchSubRow(scoreName, subMap) {
+  const sn = (scoreName || '').toLowerCase().trim(); if (!sn) return null;
+  const p = sn.split(/\s+/);
+  return (subMap || []).find(m => {
+    const mn = m.name.toLowerCase().trim(), mp = mn.split(/\s+/);
+    return mn === sn || (p.length > 1 && mp.length > 1 && mp[mp.length - 1] === p[p.length - 1] && mp[0][0] === p[0][0]);
+  }) || null;
+}
+
+function parseScoreSheet(html, subMap) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const gameTables = doc.querySelectorAll('table.scoresheet');
   const games = [];
@@ -1941,7 +1984,12 @@ function parseScoreSheet(html) {
     const game = {};
     gt.querySelectorAll('tr.notranslate').forEach(row => {
       const nameEl = row.querySelector('.cls_player'); if (!nameEl) return;
-      const { bowler, rank } = matchBowler(nameEl.textContent.trim());
+      const nm = nameEl.textContent.trim();
+      let { bowler, rank } = matchBowler(nm);
+      if (!bowler) {
+        const sm = matchSubRow(nm, subMap);
+        if (sm) { bowler = gb(sm.bid); rank = 0; }
+      }
       if (!bowler) return;
 
       const frames = [];
@@ -1993,17 +2041,23 @@ function calcVerifyHangings(games, participating) {
 
   for (let g = 0; g < 3; g++) {
     for (let f = 0; f < 10; f++) {
+      // Only bowlers who actually have a line this game count: a blank row
+      // (absent, no sub) must not look like a non-striker, and the rules scale
+      // to however many are bowling (4 normally, 3 when short-handed).
+      const act = participating.filter(bid => games[g]?.[bid] && (games[g][bid].total > 0 || (games[g][bid].frames || []).some(fr => (fr[0] || '').trim())));
+      if (act.length < 2) continue;
+      const n = act.length;
       const b1s = {};
-      participating.forEach(bid => { b1s[bid] = (games[g]?.[bid]?.frames?.[f]?.[0] || '').trim(); });
-      const strikers = new Set(participating.filter(bid => b1s[bid] === 'X'));
+      act.forEach(bid => { b1s[bid] = (games[g]?.[bid]?.frames?.[f]?.[0] || '').trim(); });
+      const strikers = new Set(act.filter(bid => b1s[bid] === 'X'));
 
       // Resolve a pending all-4 chain once the streak actually breaks — every
       // all-4 frame that passed unresolved (everyone kept striking) stacks
       // onto whoever has this frame's lowest ball, all landing here at once.
-      if (pendingAll4 > 0 && strikers.size < 4) {
+      if (pendingAll4 > 0 && strikers.size < n) {
         let lowest = 11;
-        participating.forEach(bid => { const v = ballVal(b1s[bid]); if (v < lowest) lowest = v; });
-        participating.forEach(bid => {
+        act.forEach(bid => { const v = ballVal(b1s[bid]); if (v < lowest) lowest = v; });
+        act.forEach(bid => {
           if (ballVal(b1s[bid]) === lowest) {
             for (let k = 0; k < pendingAll4; k++) { h[bid]++; where[bid].push({ g, f, reason: 'all4-low' }); }
           }
@@ -2012,13 +2066,13 @@ function calcVerifyHangings(games, participating) {
       }
 
       // Solo non-striker
-      if (strikers.size === 3) {
-        const ns = participating.find(bid => !strikers.has(bid));
+      if (strikers.size === n - 1) {
+        const ns = act.find(bid => !strikers.has(bid));
         if (ns) { h[ns]++; where[ns].push({ g, f, reason: 'solo' }); }
       }
 
       // All-4 → extend (or start) the pending chain
-      if (strikers.size === 4) {
+      if (strikers.size === n) {
         if (f < 9 || g < 2) pendingAll4++; // carries into next frame/game; Game 3 frame 10 has nowhere to carry to
       }
     }
@@ -2249,7 +2303,9 @@ async function fetchAndVerify() {
     if (!html) throw new Error('All proxies failed — check your network connection');
 
     status.textContent = 'Parsing scores…';
-    const games = parseScoreSheet(html);
+    const wn0 = editingWeek || S.currentWeek, w0 = wn0 ? gw(wn0) : null;
+    const subMap = (w0?.absent || []).map(bid => ({ bid, sub: subFor(w0, bid) })).filter(x => x.sub).map(x => ({ name: x.sub.name, bid: x.bid }));
+    const games = parseScoreSheet(html, subMap);
 
     if (!games.length) throw new Error('No score tables found — wrong URL?');
 
@@ -2257,7 +2313,10 @@ async function fetchAndVerify() {
 
     const wn = editingWeek || S.currentWeek;
     const w  = wn ? gw(wn) : null;
-    const participating = w?.participating || S.bowlers.map(b => b.id);
+    // Absent bowlers with a sub assigned are verified too (the sub's frames),
+    // but their scores are never saved and they get no score flags.
+    const subbed = (w?.absent || []).filter(bid => subFor(w, bid));
+    const participating = [...(w?.participating || S.bowlers.map(b => b.id)), ...subbed];
     const avgs = w?.avgs || Object.fromEntries(S.bowlers.map(b => [b.id, b.avg]));
 
     const calcHRes = calcVerifyHangings(games, participating);
@@ -2282,9 +2341,10 @@ async function fetchAndVerify() {
       const tots = gameTotals[bid];
       const total3 = tots.reduce((a,b)=>a+b,0);
       const avg = avgs[bid] || 0;
-      const highGame = tots.some(t => t >= avg + 50);
-      const lowGame  = tots.some(t => t > 0 && t <= avg - 50);
-      const under500 = total3 > 0 && total3 < 500;
+      const isSub = subbed.includes(bid);   // a sub's games don't trigger player score fees
+      const highGame = !isSub && tots.some(t => t >= avg + 50);
+      const lowGame  = !isSub && tots.some(t => t > 0 && t <= avg - 50);
+      const under500 = !isSub && total3 > 0 && total3 < 500;
       // Swept: lowest score in all 3 games
       const swept = [0,1,2].every(g => {
         const myScore = games[g]?.[bid]?.total || 0;
@@ -2331,7 +2391,7 @@ async function fetchAndVerify() {
       html2 += `<div class="card" style="border-left:4px solid ${col(b)};margin-bottom:10px">
         <div class="ch" style="gap:8px">
           <span class="dot" style="background:${col(b)}"></span>
-          <span style="flex:1">${b.name}</span>
+          <span style="flex:1">${b.name}${subbed.includes(bid) ? ` <span class="sm">(sub: ${esc(subFor(w, bid).name)})</span>` : ''}</span>
           <span class="sm">${tots[0]} / ${tots[1]} / ${tots[2]} = ${tots.reduce((a,c)=>a+c,0)}</span>
         </div>
         <div class="cb" style="display:flex;flex-direction:column;gap:8px">
@@ -2385,6 +2445,10 @@ function countInf(bid, iid, wn) {
 // ── Admin ─────────────────────────────────────────────────────────────────────
 function readAdminInputs() {
   S.season = $('adm-season').value.trim() || S.season;
+  document.querySelectorAll('[data-sub-id]').forEach(inp => {
+    if (!S.subs || !S.subs.length) S.subs = subRoster().map(x => ({ ...x }));
+    const x = gsub(inp.dataset.subId); if (x) x.name = inp.value.trim();
+  });
   document.querySelectorAll('[data-bid]').forEach(inp => { const b=gb(inp.dataset.bid); if(b) b.avg=parseFloat(inp.value)||b.avg; });
   document.querySelectorAll('[data-name-iid]').forEach(inp => { const i=gi(inp.dataset.nameIid); const v=inp.value.trim(); if(i && v) i.name=v; });
   document.querySelectorAll('[data-iid]').forEach(inp => { const i=gi(inp.dataset.iid); if(i) i.fee=parseFloat(inp.value)||i.fee; });
